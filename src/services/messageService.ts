@@ -42,7 +42,7 @@ export const messageService = {
     }
     const { data, error } = await supabase
       .from('messages')
-      .insert({ case_id: caseId, role, content })
+      .insert({ case_id: caseId, role, content , user_id: (await supabase.auth.getUser()).data.user?.id})
       .select()
       .single();
     if (error) throw error;
