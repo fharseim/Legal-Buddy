@@ -95,7 +95,7 @@ export default function CaseDetail() {
     try {
       const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
       const result = await ai.models.generateContent({
-        model: 'gemini-2.0-flash-001',
+        model: 'ggemini-2.5-flash',
         contents: [{ role: 'user', parts: [{ text: 'Bitte analysiere meinen Fall und gib mir eine erste Einschätzung.' }] }],
         config: { systemInstruction: buildSystemPrompt(c) },
       });
@@ -138,7 +138,7 @@ export default function CaseDetail() {
       }));
 
       const result = await ai.models.generateContent({
-        model: 'gemini-2.0-flash-001',
+        model: 'gemini-2.5-flash',
         contents: history,
         config: { systemInstruction: buildSystemPrompt(legalCase) },
       });
