@@ -67,9 +67,19 @@ export const caseService = {
       DEMO_CASES.unshift(demoCase);
       return demoCase;
     }
+    // Get current user id for RLS
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
     const { data, error } = await supabase
       .from('cases')
-      .insert({ title: input.title, category: input.category, description: input.description, urgency: input.urgency ?? 'normal' })
+      .insert({
+        user_id: user.id,
+        title: input.title,
+        category: input.category,
+        description: input.description,
+        urgency: input.urgency ?? 'normal',
+      })
       .select()
       .single();
     if (error) throw error;
@@ -79,10 +89,18 @@ export const caseService = {
   async updateCase(id: string, input: UpdateCaseInput): Promise<Case> {
     if (!isSupabaseConfigured || !supabase) {
       const idx = DEMO_CASES.findIndex(c => c.id === id);
-      if (idx >= 0) { DEMO_CASES[idx] = { ...DEMO_CASES[idx], ...input, updated_at: new Date().toISOString() }; return DEMO_CASES[idx]; }
+      if (idx >= 0) {
+        DEMO_CASES[idx] = { ...DEMO_CASES[idx], ...input, updated_at: new Date().toISOString() };
+        return DEMO_CASES[idx];
+      }
       throw new Error('Case not found');
     }
-    const { data, error } = await supabase.from('cases').update({ ...input, updated_at: new Date().toISOString() }).eq('id', id).select().single();
+    const { data, error } = await supabase
+      .from('cases')
+      .update({ ...input, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single();
     if (error) throw error;
     return data as Case;
   },
