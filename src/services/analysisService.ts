@@ -37,81 +37,58 @@ const URGENCY_LABELS: Record<string, string> = {
 };
 
 function buildPass1Prompt(c: Case): string {
-  return `Du bist ein erfahrener deutscher Rechtsanwalt mit Spezialisierung auf ${c.category}.
-
-MANDAT:
-Titel: ${c.title}
-Rechtsgebiet: ${c.category}
-Dringlichkeit: ${URGENCY_LABELS[c.urgency] ?? c.urgency}
-Beschreibung: ${c.description ?? 'Keine Beschreibung angegeben'}
-
-Erstelle eine vollstaendige rechtliche Erstanalyse mit folgenden Pflichtabschnitten:
-
-## 1. Sachverhaltserfassung
-Fasse den Sachverhalt in juristischer Sprache zusammen.
-
-## 2. Rechtliche Einordnung
-Welche Gesetze, Paragraphen (SS) und ggf. Rechtsprechung (BGH, OLG) sind relevant? Zitiere praezise.
-
-## 3. Rechtslage und Bewertung
-Wie ist die rechtliche Situation des Mandanten? Staerken und Schwaechen des Falls.
-
-## 4. Konkrete Handlungsempfehlungen
-Schritt-fuer-Schritt was der Mandant jetzt tun sollte. Prioritisiert nach Wichtigkeit.
-
-## 5. Wichtige Fristen
-Welche Fristen (Verjaehrung, Widerruf, etc.) muessen beachtet werden? Mit konkreten Zeitangaben.
-
-## 6. Fehlende Informationen
-Welche Informationen fehlen fuer eine vollstaendige Bewertung?
-
-## 7. Confidence Score
-Wie sicher bist du bei dieser Analyse auf einer Skala von 1-10?
-Antworte mit: SCORE: X (dann ein Satz Begruendung)`;
+  return 'Du bist ein erfahrener deutscher Rechtsanwalt mit Spezialisierung auf ' + c.category + '.\n\n'
+    + 'MANDAT:\n'
+    + 'Titel: ' + c.title + '\n'
+    + 'Rechtsgebiet: ' + c.category + '\n'
+    + 'Dringlichkeit: ' + (URGENCY_LABELS[c.urgency] ?? c.urgency) + '\n'
+    + 'Beschreibung: ' + (c.description ?? 'Keine Beschreibung angegeben') + '\n\n'
+    + 'Erstelle eine vollstaendige rechtliche Erstanalyse mit folgenden Pflichtabschnitten:\n\n'
+    + '## 1. Sachverhaltserfassung\n'
+    + 'Fasse den Sachverhalt in juristischer Sprache zusammen.\n\n'
+    + '## 2. Rechtliche Einordnung\n'
+    + 'Welche Gesetze, Paragraphen und ggf. Rechtsprechung (BGH, OLG) sind relevant? Zitiere praezise.\n\n'
+    + '## 3. Rechtslage und Bewertung\n'
+    + 'Wie ist die rechtliche Situation des Mandanten? Staerken und Schwaechen des Falls.\n\n'
+    + '## 4. Konkrete Handlungsempfehlungen\n'
+    + 'Schritt-fuer-Schritt was der Mandant jetzt tun sollte.\n\n'
+    + '## 5. Wichtige Fristen\n'
+    + 'Welche Fristen muessen beachtet werden? Mit konkreten Zeitangaben.\n\n'
+    + '## 6. Fehlende Informationen\n'
+    + 'Welche Informationen fehlen fuer eine vollstaendige Bewertung?\n\n'
+    + '## 7. Confidence Score\n'
+    + 'Wie sicher bist du bei dieser Analyse auf einer Skala von 1-10?\n'
+    + 'Antworte mit: SCORE: X (dann ein Satz Begruendung)';
 }
 
 function buildPass2Prompt(pass1: string, c: Case): string {
-  return `Du bist ein zweiter unabhaengiger Anwalt und Qualitaetspruefer.
-
-Rechtsgebiet: ${c.category}
-Titel: ${c.title}
-
-ANALYSE DES KOLLEGEN:
-${pass1}
-
-DEINE AUFGABE - Qualitaetspruefung:
-
-## Rechtliche Korrektheit
-Sind die zitierten Paragraphen und Gesetze korrekt und vollstaendig?
-
-## Fehlende Aspekte
-Fehlen wichtige Rechtsbereiche, Fristen oder Handlungsoptionen?
-
-## Korrekturen und Ergaenzungen
-Liste konkrete Korrekturen oder Ergaenzungen auf.
-
-## Finales Urteil
-GENEHMIGT / GENEHMIGT_MIT_ANMERKUNGEN / UEBERARBEITUNG_ERFORDERLICH`;
+  return 'Du bist ein zweiter unabhaengiger Anwalt und Qualitaetspruefer.\n\n'
+    + 'Rechtsgebiet: ' + c.category + '\n'
+    + 'Titel: ' + c.title + '\n\n'
+    + 'ANALYSE DES KOLLEGEN:\n' + pass1 + '\n\n'
+    + 'DEINE AUFGABE - Qualitaetspruefung:\n\n'
+    + '## Rechtliche Korrektheit\n'
+    + 'Sind die zitierten Paragraphen und Gesetze korrekt und vollstaendig?\n\n'
+    + '## Fehlende Aspekte\n'
+    + 'Fehlen wichtige Rechtsbereiche, Fristen oder Handlungsoptionen?\n\n'
+    + '## Korrekturen und Ergaenzungen\n'
+    + 'Liste konkrete Korrekturen oder Ergaenzungen auf.\n\n'
+    + '## Finales Urteil\n'
+    + 'GENEHMIGT / GENEHMIGT_MIT_ANMERKUNGEN / UEBERARBEITUNG_ERFORDERLICH';
 }
 
 function buildFinalPrompt(pass1: string, pass2: string): string {
-  return `Du bist ein leitender Anwalt. Erstelle die FINALE bereinigte Analyse fuer den Mandanten.
-Integriere alle Korrekturen aus der Qualitaetspruefung.
-
-ERSTANALYSE:
-${pass1}
-
-QUALITAETSPRUEFUNG:
-${pass2}
-
-ANFORDERUNGEN:
-- Klar und verstaendlich fuer Laien
-- Alle Paragraphen-Zitate korrekt
-- Konkrete, umsetzbare Handlungsempfehlungen
-- Strukturiert mit klaren Abschnitten
-- Schlusshinweis: "Dies ist eine erste Rechtsinformation, kein Ersatz fuer individuelle Anwaltsberatung."
-
-Schreibe die finale Analyse jetzt:`;
+  return 'Du bist ein leitender Anwalt. Erstelle die FINALE bereinigte Analyse fuer den Mandanten.\n'
+    + 'Integriere alle Korrekturen aus der Qualitaetspruefung.\n\n'
+    + 'ERSTANALYSE:\n' + pass1 + '\n\n'
+    + 'QUALITAETSPRUEFUNG:\n' + pass2 + '\n\n'
+    + 'ANFORDERUNGEN:\n'
+    + '- Klar und verstaendlich fuer Laien\n'
+    + '- Alle Paragraphen-Zitate korrekt\n'
+    + '- Konkrete, umsetzbare Handlungsempfehlungen\n'
+    + '- Strukturiert mit klaren Abschnitten\n'
+    + '- Schlusshinweis: Dies ist eine erste Rechtsinformation, kein Ersatz fuer individuelle Anwaltsberatung.\n\n'
+    + 'Schreibe die finale Analyse jetzt:';
 }
 
 function extractConfidenceScore(text: string): number {
@@ -185,6 +162,19 @@ export const analysisService = {
     return (data ?? []) as any;
   },
 
+  async getAnalysesForUser(): Promise<CaseAnalysis[]> {
+    if (!supabase) return [];
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return [];
+    const { data, error } = await supabase
+      .from('case_analyses')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false });
+    if (error) return [];
+    return (data ?? []) as CaseAnalysis[];
+  },
+
   async getAnalysisById(id: string): Promise<CaseAnalysis | null> {
     if (!supabase) return null;
     const { data, error } = await supabase
@@ -230,6 +220,20 @@ export const analysisService = {
       status: 'sent',
       sent_at: new Date().toISOString(),
     });
+  },
+
+  async sendQuestionsToUser(analysisId: string, caseId: string, questions: string[]): Promise<void> {
+    const lines = [
+      '## Rueckfragen zu Ihrem Fall',
+      '',
+      'Unser Rechtsexperte benoetigt noch einige Informationen, um Ihren Fall vollstaendig einschaetzen zu koennen:',
+      '',
+      ...questions.map((q, i) => (i + 1) + '. ' + q),
+      '',
+      'Bitte beantworten Sie diese Fragen so ausfuehrlich wie moeglich. Ihre Antworten helfen uns, Ihnen eine praezisere Einschaetzung zu geben.',
+    ];
+    await messageService.addMessage(caseId, 'assistant', lines.join('\n'));
+    await this.updateAnalysis(analysisId, { status: 'reviewed' });
   },
 
   async triggerAnalysisForCase(legalCase: Case): Promise<void> {
