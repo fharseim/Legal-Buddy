@@ -138,7 +138,7 @@ export default function Dashboard() {
         <div className="mb-10 flex items-start justify-between">
           <div>
             <h1 className="text-3xl font-bold text-slate-900 mb-1">
-              Guten Tag{user?.user_metadata?.name ? ', ' + user.user_metadata.name.split(' ')[0] : ''} \u{1F44B}
+              Guten Tag{user?.user_metadata?.name ? ', ' + user.user_metadata.name.split(' ')[0] : ''} 👋
             </h1>
             <p className="text-slate-500">
               {cases.length === 0
