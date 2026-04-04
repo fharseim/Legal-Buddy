@@ -1,0 +1,8 @@
+{
+  "name": "Legal Buddy",
+  "description": "AI-gestützter Rechtsassistent für Verbraucher in Deutschland. Dein Recht. Verständlich. Bezahlbar. Sofort.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
