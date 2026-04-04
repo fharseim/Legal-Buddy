@@ -8,17 +8,29 @@ import Register from './pages/Register';
 import CaseIntake from './pages/CaseIntake';
 import CaseDetail from './pages/CaseDetail';
 import Profile from './pages/Profile';
-import { motion, AnimatePresence } from 'motion/react';
-
 import AdminDashboard from './pages/AdminDashboard';
+import { AnimatePresence } from 'motion/react';
 
-const ProtectedRoute = ({ children, adminOnly = false }: { children: React.ReactNode, adminOnly?: boolean }) => {
-  const { user, isAuthReady } = useAppContext();
-  
-  if (!isAuthReady) return <div className="h-screen w-screen flex items-center justify-center">Laden...</div>;
-  if (!user) return <Navigate to="/login" />;
-  if (adminOnly && user.email !== 'admin@legalbuddy.de') return <Navigate to="/dashboard" />;
-  
+const ProtectedRoute = ({
+  children,
+  adminOnly = false,
+}: {
+  children: React.ReactNode;
+  adminOnly?: boolean;
+}) => {
+  const { user, isAdmin, isAuthReady } = useAppContext();
+
+  if (!isAuthReady) {
+    return (
+      <div className="h-screen w-screen flex items-center justify-center">
+        <div className="w-8 h-8 border-4 border-[#2d6a4f] border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (!user) return <Navigate to="/login" replace />;
+  if (adminOnly && !isAdmin) return <Navigate to="/dashboard" replace />;
+
   return <>{children}</>;
 };
 
@@ -29,36 +41,48 @@ function AppRoutes() {
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
-        
-        <Route path="/dashboard" element={
-          <ProtectedRoute>
-            <Dashboard />
-          </ProtectedRoute>
-        } />
-        
-        <Route path="/admin" element={
-          <ProtectedRoute adminOnly>
-            <AdminDashboard />
-          </ProtectedRoute>
-        } />
-        
-        <Route path="/intake" element={
-          <ProtectedRoute>
-            <CaseIntake />
-          </ProtectedRoute>
-        } />
-        
-        <Route path="/case/:id" element={
-          <ProtectedRoute>
-            <CaseDetail />
-          </ProtectedRoute>
-        } />
-
-        <Route path="/profile" element={
-          <ProtectedRoute>
-            <Profile />
-          </ProtectedRoute>
-        } />
+        <Route
+          path="/dashboard"
+          element={
+            <ProtectedRoute>
+              <Dashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin"
+          element={
+            <ProtectedRoute adminOnly>
+              <AdminDashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/intake"
+          element={
+            <ProtectedRoute>
+              <CaseIntake />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/case/:id"
+          element={
+            <ProtectedRoute>
+              <CaseDetail />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/profile"
+          element={
+            <ProtectedRoute>
+              <Profile />
+            </ProtectedRoute>
+          }
+        />
+        {/* Catch-all redirect */}
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </AnimatePresence>
   );
