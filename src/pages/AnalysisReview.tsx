@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { ArrowLeft, Send, CheckCircle, ChevronDown, ChevronUp, AlertCircle, FileText } from 'lucide-react';
+import { ArrowLeft, Send, CheckCircle, ChevronDown, ChevronUp, AlertCircle, FileText, MessageCircleQuestion } from 'lucide-react';
 import DashboardLayout from '../components/DashboardLayout';
 import { analysisService, CaseAnalysis } from '../services/analysisService';
 import { caseService, Case } from '../services/caseService';
@@ -12,7 +12,7 @@ const CONFIDENCE_COLOR = (score: number) =>
                'text-red-600 bg-red-50 border-red-200';
 
 function CollapsibleSection({
-  title, content, defaultOpen = false, badge
+  title, content, defaultOpen = false, badge,
 }: {
   title: string; content: string; defaultOpen?: boolean; badge?: React.ReactNode;
 }) {
@@ -57,8 +57,10 @@ export default function AnalysisReview() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [sending, setSending] = useState(false);
+  const [sendingQuestions, setSendingQuestions] = useState(false);
   const [saved, setSaved] = useState(false);
   const [sent, setSent] = useState(false);
+  const [questionsSent, setQuestionsSent] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -92,16 +94,31 @@ export default function AnalysisReview() {
     }
   };
 
+  const handleSendQuestions = async () => {
+    if (!analysis || !analysis.questions_for_user?.length) return;
+    setSendingQuestions(true);
+    try {
+      await analysisService.sendQuestionsToUser(
+        analysis.id,
+        analysis.case_id,
+        analysis.questions_for_user,
+      );
+      setQuestionsSent(true);
+      const updated = await analysisService.getAnalysisById(analysis.id);
+      if (updated) setAnalysis(updated);
+    } finally {
+      setSendingQuestions(false);
+    }
+  };
+
   const handleSendToUser = async () => {
     if (!analysis || !finalContent.trim()) return;
     setSending(true);
     try {
-      // Save latest edits first
       await analysisService.updateAnalysis(analysis.id, {
         final_content: finalContent,
         admin_notes: adminNotes,
       });
-      // Send to user chat
       await analysisService.sendAnalysisToUser(analysis.id, analysis.case_id, finalContent);
       setSent(true);
       setTimeout(() => navigate('/admin'), 1500);
@@ -132,6 +149,7 @@ export default function AnalysisReview() {
   }
 
   const alreadySent = analysis.status === 'sent';
+  const hasQuestions = analysis.questions_for_user && analysis.questions_for_user.length > 0;
 
   return (
     <DashboardLayout>
@@ -171,12 +189,33 @@ export default function AnalysisReview() {
           </div>
         </div>
 
-        {/* Questions for user (if any) */}
-        {analysis.questions_for_user && analysis.questions_for_user.length > 0 && (
+        {/* Questions box with send button */}
+        {hasQuestions && (
           <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5">
-            <h3 className="font-semibold text-amber-800 text-sm mb-3 flex items-center gap-2">
-              <AlertCircle className="w-4 h-4" /> Rueckfragen an Mandanten
-            </h3>
+            <div className="flex items-start justify-between gap-4 mb-3">
+              <h3 className="font-semibold text-amber-800 text-sm flex items-center gap-2">
+                <AlertCircle className="w-4 h-4" /> Rueckfragen an Mandanten
+              </h3>
+              {!alreadySent && !questionsSent && (
+                <button
+                  onClick={handleSendQuestions}
+                  disabled={sendingQuestions}
+                  className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl transition-colors disabled:opacity-40"
+                >
+                  {sendingQuestions ? (
+                    <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <MessageCircleQuestion className="w-3.5 h-3.5" />
+                  )}
+                  Fragen an Mandant senden
+                </button>
+              )}
+              {questionsSent && (
+                <span className="flex items-center gap-1 text-xs font-bold text-emerald-700">
+                  <CheckCircle className="w-3.5 h-3.5" /> Gesendet
+                </span>
+              )}
+            </div>
             <ul className="space-y-1.5">
               {analysis.questions_for_user.map((q, i) => (
                 <li key={i} className="text-sm text-amber-700 flex items-start gap-2">
@@ -273,7 +312,7 @@ export default function AnalysisReview() {
             <CheckCircle className="w-4 h-4" />
             Zugestellt am {new Date(analysis.sent_at).toLocaleDateString('de-DE', {
               day: '2-digit', month: 'long', year: 'numeric',
-              hour: '2-digit', minute: '2-digit'
+              hour: '2-digit', minute: '2-digit',
             })}
           </div>
         )}
