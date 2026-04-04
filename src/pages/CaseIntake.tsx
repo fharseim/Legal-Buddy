@@ -1,419 +1,238 @@
-import React, { useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { 
-  ShoppingBag, 
-  Scale, 
-  Home, 
-  Briefcase, 
-  HelpCircle, 
-  ArrowLeft, 
-  ArrowRight, 
-  Calendar, 
-  Euro, 
-  MessageSquare, 
-  Upload, 
-  Check, 
-  Loader2,
-  X,
-  FileText
-} from 'lucide-react';
-import { useAppContext } from '../context/AppContext';
-import DashboardLayout from '../components/DashboardLayout';
-import { cn } from '../lib/utils';
-import { AIService } from '../services/aiService';
-import { Case, Rechtsgebiet } from '../types';
+import { caseService } from '../services/caseService';
+
+const CATEGORIES = [
+  { id: 'mietrecht', label: 'Mietrecht', icon: '🏠', desc: 'Kündigung, Mängel, Kaution' },
+  { id: 'arbeitsrecht', label: 'Arbeitsrecht', icon: '💼', desc: 'Kündigung, Abmahnung, Lohn' },
+  { id: 'vertragsrecht', label: 'Vertragsrecht', icon: '📄', desc: 'Kaufverträge, AGB, Widerruf' },
+  { id: 'verbraucherrecht', label: 'Verbraucherrecht', icon: '🛒', desc: 'Gewährleistung, Reklamation' },
+  { id: 'familienrecht', label: 'Familienrecht', icon: '👨‍👩‍👧', desc: 'Unterhalt, Scheidung, Sorgerecht' },
+  { id: 'verkehrsrecht', label: 'Verkehrsrecht', icon: '🚗', desc: 'Unfall, Bußgeld, Führerschein' },
+  { id: 'erbrecht', label: 'Erbrecht', icon: '📜', desc: 'Testament, Erbfolge, Pflichtteil' },
+  { id: 'sonstiges', label: 'Sonstiges', icon: '⚖️', desc: 'Anderes Rechtsgebiet' },
+];
+
+const URGENCY_OPTIONS = [
+  { id: 'low', label: 'Niedrig', desc: 'Keine zeitliche Dringlichkeit', color: 'slate' },
+  { id: 'normal', label: 'Normal', desc: 'Innerhalb weniger Wochen', color: 'blue' },
+  { id: 'high', label: 'Hoch', desc: 'Innerhalb weniger Tage', color: 'amber' },
+  { id: 'urgent', label: 'Dringend', desc: 'Sofortiger Handlungsbedarf', color: 'red' },
+] as const;
+
+const urgencyBorder: Record<string, string> = {
+  low: 'border-slate-300 bg-slate-50',
+  normal: 'border-blue-400 bg-blue-50',
+  high: 'border-amber-400 bg-amber-50',
+  urgent: 'border-red-400 bg-red-50',
+};
 
 export default function CaseIntake() {
-  const [searchParams] = useSearchParams();
-  const initialType = searchParams.get('type') as Rechtsgebiet || null;
-  
-  const [step, setStep] = useState(initialType ? 2 : 1);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [formData, setFormData] = useState({
-    rechtsgebiet: initialType || '' as Rechtsgebiet,
-    subkategorie: '',
-    datum: '',
-    betrag: '',
-    vorkorrespondenz: '',
-    sachverhalt: '',
-    files: [] as File[]
+  const navigate = useNavigate();
+  const [step, setStep] = useState(1);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const [form, setForm] = useState({
+    category: '',
+    title: '',
+    description: '',
+    urgency: 'normal' as 'low' | 'normal' | 'high' | 'urgent',
   });
 
-  const { addCase, user } = useAppContext();
-  const navigate = useNavigate();
-
-  const handleNext = () => setStep(s => s + 1);
-  const handleBack = () => setStep(s => s - 1);
+  const canNext = () => {
+    if (step === 1) return !!form.category;
+    if (step === 2) return form.title.trim().length >= 5;
+    return true;
+  };
 
   const handleSubmit = async () => {
-    setIsAnalyzing(true);
-    
+    if (!form.category || !form.title.trim()) return;
     try {
-      const analysis = await AIService.analyzeCase(formData);
-      
-      const newCase: Case = {
-        id: `LB-${new Date().getFullYear()}-${Math.floor(Math.random() * 100000).toString().padStart(5, '0')}`,
-        userId: user?.id || '1',
-        titel: formData.sachverhalt.slice(0, 30) + '...',
-        rechtsgebiet: formData.rechtsgebiet as Rechtsgebiet,
-        subkategorie: formData.subkategorie,
-        status: 'ai_analyse_abgeschlossen',
-        sachverhalt: {
-          freitext: formData.sachverhalt,
-          datum: formData.datum,
-          betrag: Number(formData.betrag),
-          gegner: ''
-        },
-        dokumente: formData.files.map(f => ({
-          id: Math.random().toString(36).substr(2, 9),
-          name: f.name,
-          type: f.type,
-          uploadDate: new Date().toISOString(),
-          url: '#'
-        })),
-        aiAnalyse: analysis,
-        generatedDocuments: [],
-        fristen: analysis.rechtlicheEinordnung.fristen.map(f => ({
-          id: Math.random().toString(36).substr(2, 9),
-          name: f.name,
-          deadline: f.deadline,
-          type: f.type as any,
-          status: 'aktiv'
-        })),
-        timeline: [{
-          timestamp: new Date().toISOString(),
-          action: 'Fall erstellt',
-          actor: 'user',
-          details: 'Der Fall wurde erfolgreich aufgenommen und analysiert.'
-        }],
-        escalatedToLawyer: false,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
-
-      addCase(newCase);
-      navigate(`/case/${newCase.id}`);
-    } catch (error) {
-      console.error(error);
-      setIsAnalyzing(false);
+      setSaving(true);
+      setError(null);
+      const created = await caseService.createCase({
+        title: form.title.trim(),
+        category: form.category,
+        description: form.description.trim() || undefined,
+        urgency: form.urgency,
+      });
+      navigate(`/chat/${created.id}`);
+    } catch (err) {
+      console.error(err);
+      setError('Fall konnte nicht erstellt werden. Bitte versuche es erneut.');
+      setSaving(false);
     }
   };
 
-  if (isAnalyzing) {
-    return (
-      <DashboardLayout>
-        <div className="min-h-[60vh] flex flex-col items-center justify-center text-center max-w-lg mx-auto">
-          <motion.div 
-            animate={{ rotate: 360 }}
-            transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-            className="w-20 h-20 border-4 border-gray-100 border-t-[#2d6a4f] rounded-full mb-10"
-          />
-          <h2 className="text-3xl font-serif text-[#1a1a2e] mb-6">AI-Analyse läuft...</h2>
-          <div className="space-y-4 w-full">
-            {[
-              { label: "Sachverhalt wird analysiert...", done: true },
-              { label: "Relevante Gesetze werden geprüft...", done: true },
-              { label: "Rechtslage wird eingeschätzt...", done: false },
-              { label: "Handlungsoptionen werden erstellt...", done: false }
-            ].map((s, i) => (
-              <div key={i} className="flex items-center gap-4 p-4 bg-white rounded-2xl border border-gray-100 shadow-sm">
-                {s.done ? (
-                  <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center">
-                    <Check className="text-[#2d6a4f] w-4 h-4" />
-                  </div>
-                ) : (
-                  <Loader2 className="w-6 h-6 text-gray-300 animate-spin" />
-                )}
-                <span className={cn("text-sm font-bold", s.done ? "text-[#1a1a2e]" : "text-gray-400")}>{s.label}</span>
-              </div>
-            ))}
-          </div>
-          <p className="mt-10 text-gray-500 text-sm italic">"Wusstest du? Unsere AI wurde an über 50.000 Gerichtsurteilen trainiert."</p>
-        </div>
-      </DashboardLayout>
-    );
-  }
+  const selectedCategory = CATEGORIES.find(c => c.id === form.category);
 
   return (
-    <DashboardLayout>
-      <div className="max-w-3xl mx-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-10">
-          <button onClick={handleBack} disabled={step === 1} className="p-2 hover:bg-gray-100 rounded-full disabled:opacity-0 transition-all">
-            <ArrowLeft className="w-6 h-6 text-gray-500" />
+    <div className="min-h-screen bg-slate-50 flex flex-col">
+      {/* Header */}
+      <header className="bg-white border-b border-slate-200">
+        <div className="max-w-2xl mx-auto px-6 py-4 flex items-center justify-between">
+          <button onClick={() => navigate('/dashboard')} className="flex items-center gap-2 text-slate-500 hover:text-slate-900 transition-colors text-sm">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+            Zurück
           </button>
-          <div className="flex gap-2">
-            {[1, 2, 3, 4].map(s => (
-              <div key={s} className={cn(
-                "h-1.5 w-12 rounded-full transition-all",
-                step >= s ? "bg-[#2d6a4f]" : "bg-gray-100"
-              )} />
+          <div className="flex items-center gap-2">
+            {[1, 2, 3].map(s => (
+              <div key={s} className={`h-1.5 rounded-full transition-all duration-300 ${s <= step ? 'bg-blue-600 w-8' : 'bg-slate-200 w-4'}`} />
             ))}
           </div>
-          <button onClick={() => navigate('/dashboard')} className="p-2 hover:bg-gray-100 rounded-full transition-all">
-            <X className="w-6 h-6 text-gray-500" />
-          </button>
+          <span className="text-xs text-slate-400">Schritt {step} von 3</span>
         </div>
+      </header>
 
+      <main className="flex-1 max-w-2xl mx-auto w-full px-6 py-10">
         <AnimatePresence mode="wait">
+          {/* Step 1: Kategorie */}
           {step === 1 && (
-            <motion.div 
-              key="step1"
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              className="space-y-8"
-            >
-              <div className="text-center mb-10">
-                <h1 className="text-3xl font-serif text-[#1a1a2e] mb-2">Worum geht es?</h1>
-                <p className="text-gray-500">Wähle das passende Rechtsgebiet für dein Anliegen.</p>
-              </div>
-
-              <div className="grid sm:grid-cols-2 gap-4">
-                {[
-                  { id: 'verbraucherrecht', icon: ShoppingBag, title: 'Verbraucherrecht', desc: 'Kauf, Abo, Online-Bestellung' },
-                  { id: 'vertragscheck', icon: Scale, title: 'Vertragscheck', desc: 'Vertrag prüfen lassen' },
-                  { id: 'mietrecht', icon: Home, title: 'Mietrecht', desc: 'Miete, Vermieter, Wohnung', comingSoon: true },
-                  { id: 'arbeitsrecht', icon: Briefcase, title: 'Arbeitsrecht', desc: 'Arbeitgeber, Kündigung', comingSoon: true },
-                  { id: 'sonstiges', icon: HelpCircle, title: 'Ich bin mir nicht sicher', desc: 'Wir helfen bei der Einordnung' }
-                ].map(item => (
-                  <button 
-                    key={item.id}
-                    disabled={item.comingSoon}
-                    onClick={() => {
-                      setFormData({...formData, rechtsgebiet: item.id as any});
-                      handleNext();
-                    }}
-                    className={cn(
-                      "p-8 rounded-[32px] border text-left transition-all group relative",
-                      item.comingSoon ? "bg-gray-50 border-gray-100 opacity-60 grayscale" : "bg-white border-gray-100 hover:border-[#2d6a4f] hover:shadow-xl"
-                    )}
+            <motion.div key="step1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
+              <h1 className="text-2xl font-bold text-slate-900 mb-2">Welches Rechtsgebiet betrifft Ihr Anliegen?</h1>
+              <p className="text-slate-500 text-sm mb-8">Wählen Sie die passende Kategorie aus.</p>
+              <div className="grid grid-cols-2 gap-3">
+                {CATEGORIES.map(cat => (
+                  <button
+                    key={cat.id}
+                    onClick={() => setForm(f => ({ ...f, category: cat.id }))}
+                    className={`p-4 rounded-2xl border text-left transition-all ${
+                      form.category === cat.id
+                        ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-100'
+                        : 'border-slate-200 bg-white hover:border-slate-300'
+                    }`}
                   >
-                    {item.comingSoon && (
-                      <span className="absolute top-4 right-4 bg-gray-200 text-gray-500 text-[8px] font-bold px-2 py-0.5 rounded-full uppercase">Coming Soon</span>
-                    )}
-                    <div className="w-12 h-12 bg-gray-50 rounded-2xl flex items-center justify-center mb-6 group-hover:bg-green-50 transition-colors">
-                      <item.icon className="w-6 h-6 text-gray-400 group-hover:text-[#2d6a4f]" />
-                    </div>
-                    <h3 className="text-lg font-bold text-[#1a1a2e] mb-1">{item.title}</h3>
-                    <p className="text-sm text-gray-500">{item.desc}</p>
+                    <span className="text-2xl block mb-2">{cat.icon}</span>
+                    <span className="font-semibold text-slate-900 text-sm block">{cat.label}</span>
+                    <span className="text-xs text-slate-500">{cat.desc}</span>
                   </button>
                 ))}
               </div>
             </motion.div>
           )}
 
+          {/* Step 2: Titel & Beschreibung */}
           {step === 2 && (
-            <motion.div 
-              key="step2"
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              className="space-y-8"
-            >
-              <div className="text-center mb-10">
-                <h1 className="text-3xl font-serif text-[#1a1a2e] mb-2">Details zum Vorfall</h1>
-                <p className="text-gray-500">Ein paar Eckdaten helfen uns bei der Analyse.</p>
+            <motion.div key="step2" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
+              <div className="flex items-center gap-2 mb-6">
+                <span className="text-2xl">{selectedCategory?.icon}</span>
+                <span className="text-sm font-medium text-slate-500">{selectedCategory?.label}</span>
               </div>
-
-              <div className="space-y-6">
-                <div className="grid sm:grid-cols-2 gap-6">
-                  <div>
-                    <label className="block text-sm font-bold text-[#1a1a2e] mb-2">Wann ist es passiert?</label>
-                    <div className="relative">
-                      <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
-                      <input 
-                        type="date" 
-                        value={formData.datum}
-                        onChange={(e) => setFormData({...formData, datum: e.target.value})}
-                        className="w-full pl-12 pr-4 py-4 bg-white border border-gray-100 focus:border-[#2d6a4f] focus:ring-4 focus:ring-green-50 rounded-2xl transition-all outline-none"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-bold text-[#1a1a2e] mb-2">Streitwert (ca. in €)</label>
-                    <div className="relative">
-                      <Euro className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
-                      <input 
-                        type="number" 
-                        value={formData.betrag}
-                        onChange={(e) => setFormData({...formData, betrag: e.target.value})}
-                        className="w-full pl-12 pr-4 py-4 bg-white border border-gray-100 focus:border-[#2d6a4f] focus:ring-4 focus:ring-green-50 rounded-2xl transition-all outline-none"
-                        placeholder="0.00"
-                      />
-                    </div>
-                  </div>
-                </div>
-
+              <h1 className="text-2xl font-bold text-slate-900 mb-2">Beschreiben Sie Ihr Anliegen</h1>
+              <p className="text-slate-500 text-sm mb-8">Je mehr Details, desto besser kann die KI helfen.</p>
+              <div className="space-y-5">
                 <div>
-                  <label className="block text-sm font-bold text-[#1a1a2e] mb-2">Bisheriger Kontakt zum Gegner?</label>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    {['Keiner', 'E-Mail', 'Telefon', 'Post'].map(opt => (
-                      <button 
-                        key={opt}
-                        onClick={() => setFormData({...formData, vorkorrespondenz: opt})}
-                        className={cn(
-                          "py-3 rounded-xl border text-sm font-bold transition-all",
-                          formData.vorkorrespondenz === opt ? "bg-[#1a1a2e] text-white border-[#1a1a2e]" : "bg-white border-gray-100 text-gray-500 hover:border-gray-300"
-                        )}
-                      >
-                        {opt}
-                      </button>
-                    ))}
-                  </div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                    Kurzer Titel <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={form.title}
+                    onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
+                    placeholder="z.B. Unrechtmäßige Kündigung durch Vermieter"
+                    className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-50 transition-all"
+                    maxLength={120}
+                  />
+                  <p className="text-xs text-slate-400 mt-1">{form.title.length}/120 Zeichen</p>
                 </div>
-
-                <button 
-                  onClick={handleNext}
-                  disabled={!formData.datum}
-                  className="w-full bg-[#1a1a2e] text-white py-4 rounded-full font-bold hover:bg-black transition-all flex items-center justify-center gap-2 group disabled:opacity-50"
-                >
-                  Weiter
-                  <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                </button>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">Detaillierte Beschreibung</label>
+                  <textarea
+                    value={form.description}
+                    onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+                    placeholder="Was ist genau passiert? Wann? Welche Dokumente liegen vor?"
+                    rows={6}
+                    className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-50 transition-all resize-none"
+                  />
+                </div>
               </div>
             </motion.div>
           )}
 
+          {/* Step 3: Dringlichkeit */}
           {step === 3 && (
-            <motion.div 
-              key="step3"
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              className="space-y-8"
-            >
-              <div className="text-center mb-10">
-                <h1 className="text-3xl font-serif text-[#1a1a2e] mb-2">Was ist genau passiert?</h1>
-                <p className="text-gray-500">Schildere den Sachverhalt so detailliert wie möglich.</p>
+            <motion.div key="step3" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
+              <h1 className="text-2xl font-bold text-slate-900 mb-2">Wie dringend ist Ihr Anliegen?</h1>
+              <p className="text-slate-500 text-sm mb-8">Dies hilft uns, Prioritäten richtig zu setzen.</p>
+              <div className="space-y-3 mb-8">
+                {URGENCY_OPTIONS.map(opt => (
+                  <button
+                    key={opt.id}
+                    onClick={() => setForm(f => ({ ...f, urgency: opt.id }))}
+                    className={`w-full p-4 rounded-2xl border-2 text-left transition-all ${
+                      form.urgency === opt.id ? urgencyBorder[opt.id] : 'border-slate-100 bg-white hover:border-slate-200'
+                    }`}
+                  >
+                    <span className="font-semibold text-slate-900 text-sm block">{opt.label}</span>
+                    <span className="text-xs text-slate-500">{opt.desc}</span>
+                  </button>
+                ))}
               </div>
 
-              <div className="space-y-6">
-                <div>
-                  <label className="block text-sm font-bold text-[#1a1a2e] mb-2">Deine Schilderung</label>
-                  <div className="relative">
-                    <MessageSquare className="absolute left-4 top-4 text-gray-400 w-5 h-5" />
-                    <textarea 
-                      value={formData.sachverhalt}
-                      onChange={(e) => setFormData({...formData, sachverhalt: e.target.value})}
-                      rows={8}
-                      className="w-full pl-12 pr-4 py-4 bg-white border border-gray-100 focus:border-[#2d6a4f] focus:ring-4 focus:ring-green-50 rounded-2xl transition-all outline-none resize-none"
-                      placeholder="Erzähl uns, was passiert ist. Je mehr Details, desto besser können wir helfen..."
-                    />
+              {/* Summary */}
+              <div className="bg-white rounded-2xl border border-slate-100 p-5">
+                <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Zusammenfassung</h3>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Kategorie</span>
+                    <span className="font-medium text-slate-900">{selectedCategory?.label}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Titel</span>
+                    <span className="font-medium text-slate-900 truncate ml-4 max-w-xs text-right">{form.title}</span>
                   </div>
                 </div>
+              </div>
 
-                <div>
-                  <label className="block text-sm font-bold text-[#1a1a2e] mb-2">Dokumente hochladen (optional)</label>
-                  <div className="border-2 border-dashed border-gray-200 rounded-[24px] p-10 text-center hover:border-[#2d6a4f] transition-colors cursor-pointer group bg-white">
-                    <input type="file" multiple className="hidden" id="file-upload" onChange={(e) => {
-                      if (e.target.files) setFormData({...formData, files: [...formData.files, ...Array.from(e.target.files)]});
-                    }} />
-                    <label htmlFor="file-upload" className="cursor-pointer">
-                      <div className="w-16 h-16 bg-gray-50 rounded-2xl flex items-center justify-center mx-auto mb-4 group-hover:bg-green-50 transition-colors">
-                        <Upload className="w-8 h-8 text-gray-400 group-hover:text-[#2d6a4f]" />
-                      </div>
-                      <p className="text-sm font-bold text-[#1a1a2e] mb-1">Klick zum Hochladen oder Drag & Drop</p>
-                      <p className="text-xs text-gray-400">PDF, JPG, PNG (max. 10MB)</p>
-                    </label>
-                  </div>
-                  {formData.files.length > 0 && (
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      {formData.files.map((f, i) => (
-                        <div key={i} className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-100 rounded-full text-xs font-bold text-[#1a1a2e]">
-                          <FileText className="w-3 h-3 text-gray-400" />
-                          {f.name}
-                          <button onClick={() => setFormData({...formData, files: formData.files.filter((_, idx) => idx !== i)})} className="text-red-500">
-                            <X className="w-3 h-3" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+              {error && (
+                <div className="mt-4 p-3 bg-red-50 border border-red-100 rounded-xl text-sm text-red-600">
+                  {error}
                 </div>
-
-                <button 
-                  onClick={handleNext}
-                  disabled={formData.sachverhalt.length < 20}
-                  className="w-full bg-[#1a1a2e] text-white py-4 rounded-full font-bold hover:bg-black transition-all flex items-center justify-center gap-2 group disabled:opacity-50"
-                >
-                  Zusammenfassung prüfen
-                  <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                </button>
-              </div>
-            </motion.div>
-          )}
-
-          {step === 4 && (
-            <motion.div 
-              key="step4"
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              className="space-y-8"
-            >
-              <div className="text-center mb-10">
-                <h1 className="text-3xl font-serif text-[#1a1a2e] mb-2">Stimmt alles?</h1>
-                <p className="text-gray-500">Überprüfe deine Angaben vor der Analyse.</p>
-              </div>
-
-              <div className="bg-white rounded-[32px] border border-gray-100 p-8 space-y-8 shadow-sm">
-                <div className="grid grid-cols-2 gap-8">
-                  <div>
-                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Rechtsgebiet</p>
-                    <p className="font-bold text-[#1a1a2e] capitalize">{formData.rechtsgebiet}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Datum</p>
-                    <p className="font-bold text-[#1a1a2e]">{formData.datum}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Streitwert</p>
-                    <p className="font-bold text-[#1a1a2e]">{formData.betrag || '0'} €</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Vorkorrespondenz</p>
-                    <p className="font-bold text-[#1a1a2e]">{formData.vorkorrespondenz || 'Keine'}</p>
-                  </div>
-                </div>
-
-                <div>
-                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Schilderung</p>
-                  <p className="text-sm text-gray-600 leading-relaxed italic">"{formData.sachverhalt}"</p>
-                </div>
-
-                {formData.files.length > 0 && (
-                  <div>
-                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Hochgeladene Dokumente</p>
-                    <div className="flex flex-wrap gap-2">
-                      {formData.files.map((f, i) => (
-                        <span key={i} className="px-3 py-1.5 bg-gray-50 rounded-full text-[10px] font-bold text-gray-500">{f.name}</span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div className="flex flex-col gap-4">
-                <button 
-                  onClick={handleSubmit}
-                  className="w-full bg-[#2d6a4f] text-white py-5 rounded-full font-bold hover:bg-[#1b4332] transition-all shadow-xl shadow-green-900/10 flex items-center justify-center gap-2 group"
-                >
-                  Analyse starten
-                  <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                </button>
-                <button 
-                  onClick={() => setStep(3)}
-                  className="w-full py-4 text-gray-500 font-bold hover:text-[#1a1a2e] transition-all"
-                >
-                  Bearbeiten
-                </button>
-              </div>
+              )}
             </motion.div>
           )}
         </AnimatePresence>
-      </div>
-    </DashboardLayout>
+
+        {/* Navigation */}
+        <div className="flex gap-3 mt-10">
+          {step > 1 && (
+            <button
+              onClick={() => setStep(s => s - 1)}
+              className="flex-1 py-3.5 border border-slate-200 text-slate-700 text-sm font-medium rounded-xl hover:bg-slate-50 transition-colors"
+            >
+              Zurück
+            </button>
+          )}
+          {step < 3 ? (
+            <button
+              onClick={() => setStep(s => s + 1)}
+              disabled={!canNext()}
+              className="flex-1 py-3.5 bg-blue-600 text-white text-sm font-medium rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Weiter
+            </button>
+          ) : (
+            <button
+              onClick={handleSubmit}
+              disabled={saving || !canNext()}
+              className="flex-1 py-3.5 bg-blue-600 text-white text-sm font-medium rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-40 flex items-center justify-center gap-2"
+            >
+              {saving ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  Wird erstellt…
+                </>
+              ) : (
+                'Fall erstellen & KI starten'
+              )}
+            </button>
+          )}
+        </div>
+      </main>
+    </div>
   );
 }
