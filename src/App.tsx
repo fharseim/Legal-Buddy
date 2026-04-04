@@ -7,6 +7,7 @@ import Dashboard from './pages/Dashboard';
 import CaseIntake from './pages/CaseIntake';
 import CaseDetail from './pages/CaseDetail';
 import AdminDashboard from './pages/AdminDashboard';
+import AnalysisReview from './pages/AnalysisReview';
 import Profile from './pages/Profile';
 
 function ProtectedRoute({ children, adminOnly = false }: { children: React.ReactNode; adminOnly?: boolean }) {
@@ -25,7 +26,6 @@ function ProtectedRoute({ children, adminOnly = false }: { children: React.React
 
 export default function App() {
   const { user, isAuthReady } = useAppContext();
-
   if (!isAuthReady) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
@@ -33,19 +33,17 @@ export default function App() {
       </div>
     );
   }
-
   return (
     <Routes>
       <Route path="/" element={user ? <Navigate to="/dashboard" replace /> : <LandingPage />} />
       <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <Login />} />
       <Route path="/register" element={user ? <Navigate to="/dashboard" replace /> : <Register />} />
-
       <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
       <Route path="/case-intake" element={<ProtectedRoute><CaseIntake /></ProtectedRoute>} />
       <Route path="/chat/:id" element={<ProtectedRoute><CaseDetail /></ProtectedRoute>} />
       <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
       <Route path="/admin" element={<ProtectedRoute adminOnly><AdminDashboard /></ProtectedRoute>} />
-
+      <Route path="/admin/review/:id" element={<ProtectedRoute adminOnly><AnalysisReview /></ProtectedRoute>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
