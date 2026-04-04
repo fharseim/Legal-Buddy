@@ -1,411 +1,384 @@
-import React, { useState } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { GoogleGenAI } from '@google/genai';
 import { motion, AnimatePresence } from 'motion/react';
-import { 
-  ArrowLeft, 
-  Scale, 
-  Clock, 
-  CheckCircle2, 
-  AlertCircle, 
-  FileText, 
-  Download, 
-  Mail, 
-  ChevronRight, 
-  Shield, 
-  ArrowRight,
-  MessageSquare,
-  History,
-  Printer,
-  Share2,
-  MoreVertical,
-  X,
-  Loader2
-} from 'lucide-react';
-import { useAppContext } from '../context/AppContext';
-import DashboardLayout from '../components/DashboardLayout';
-import { cn } from '../lib/utils';
-import { format } from 'date-fns';
-import { de } from 'date-fns/locale';
-import { AIService } from '../services/aiService';
+import { caseService, Case } from '../services/caseService';
+import { messageService, Message } from '../services/messageService';
+
+const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY ?? '';
+
+const STATUS_LABELS: Record<string, string> = {
+  open: 'Offen', in_progress: 'In Bearbeitung', resolved: 'Gelöst', closed: 'Abgeschlossen',
+};
+const STATUS_COLORS: Record<string, string> = {
+  open: 'bg-blue-50 text-blue-700', in_progress: 'bg-amber-50 text-amber-700',
+  resolved: 'bg-emerald-50 text-emerald-700', closed: 'bg-slate-100 text-slate-600',
+};
+const URGENCY_LABELS: Record<string, string> = {
+  low: 'Niedrig', normal: 'Normal', high: 'Hoch', urgent: 'Dringend',
+};
+
+function buildSystemPrompt(legalCase: Case): string {
+  return `Du bist Legal Buddy, ein KI-Rechtsassistent spezialisiert auf deutsches Recht für Privatpersonen und Verbraucher.
+
+FALL-KONTEXT:
+- Rechtsgebiet: ${legalCase.category}
+- Titel: ${legalCase.title}
+- Beschreibung: ${legalCase.description ?? 'Keine detaillierte Beschreibung'}
+- Dringlichkeit: ${URGENCY_LABELS[legalCase.urgency]}
+
+DEINE AUFGABE:
+1. Analysiere das rechtliche Problem klar und verständlich auf Deutsch
+2. Erkläre die relevante Rechtslage (BGB, spezielle Gesetze, Rechtsprechung)
+3. Nenne konkrete nächste Schritte und Handlungsempfehlungen
+4. Weise auf wichtige Fristen hin (z.B. Widerrufsfristen, Verjährungsfristen)
+5. Empfehle bei komplexen Fällen, einen Anwalt hinzuzuziehen
+
+KOMMUNIKATIONSSTIL:
+- Klar, präzise und verständlich (kein Juristenjargon ohne Erklärung)
+- Empathisch und lösungsorientiert
+- Strukturierte Antworten mit klaren Abschnitten
+- Immer mit dem Hinweis: "Dies ist keine Rechtsberatung, sondern allgemeine Rechtsinformation"
+
+Starte mit einer ersten Analyse des Falls, wenn noch keine Nachrichten vorhanden sind.`;
+}
+
+function formatMessage(text: string) {
+  const lines = text.split('\n');
+  return lines.map((line, i) => {
+    if (line.startsWith('## ')) return <h3 key={i} className="font-bold text-slate-900 text-base mt-3 mb-1">{line.slice(3)}</h3>;
+    if (line.startsWith('# ')) return <h2 key={i} className="font-bold text-slate-900 text-lg mt-3 mb-1">{line.slice(2)}</h2>;
+    if (line.startsWith('**') && line.endsWith('**')) return <p key={i} className="font-semibold text-slate-800 mt-2">{line.slice(2, -2)}</p>;
+    if (line.startsWith('- ') || line.startsWith('• ')) return <li key={i} className="ml-4 text-slate-700 list-disc">{line.slice(2)}</li>;
+    if (line.match(/^\d+\. /)) return <li key={i} className="ml-4 text-slate-700 list-decimal">{line.replace(/^\d+\.\s/, '')}</li>;
+    if (line.trim() === '') return <br key={i} />;
+    return <p key={i} className="text-slate-700 leading-relaxed">{line}</p>;
+  });
+}
 
 export default function CaseDetail() {
-  const { id } = useParams();
-  const { cases, updateCase } = useAppContext();
+  const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [isGeneratingDoc, setIsGeneratingDoc] = useState(false);
-  const [selectedDoc, setSelectedDoc] = useState<any>(null);
+  const [legalCase, setLegalCase] = useState<Case | null>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
+  const [showSidebar, setShowSidebar] = useState(false);
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  const currentCase = cases.find(c => c.id === id);
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, sending]);
 
-  if (!currentCase) {
-    return (
-      <DashboardLayout>
-        <div className="text-center py-20">
-          <h2 className="text-2xl font-bold mb-4">Fall nicht gefunden</h2>
-          <Link to="/dashboard" className="text-[#2d6a4f] font-bold hover:underline">Zurück zum Dashboard</Link>
-        </div>
-      </DashboardLayout>
-    );
-  }
-
-  const handleGenerateDoc = async (type: string) => {
-    setIsGeneratingDoc(true);
+  const loadData = useCallback(async () => {
+    if (!id) return;
     try {
-      const doc = await AIService.generateDocument(type, currentCase);
-      const updatedCase = {
-        ...currentCase,
-        generatedDocuments: [...currentCase.generatedDocuments, doc],
-        timeline: [
-          ...currentCase.timeline,
-          {
-            timestamp: new Date().toISOString(),
-            action: 'Dokument generiert',
-            actor: 'ai' as const,
-            details: `Das Dokument "${doc.titel}" wurde erfolgreich erstellt.`
-          }
-        ],
-        updatedAt: new Date().toISOString()
-      };
-      updateCase(updatedCase);
-      setSelectedDoc(doc);
-    } catch (error) {
-      console.error(error);
+      const [c, msgs] = await Promise.all([caseService.getCase(id), messageService.getMessages(id)]);
+      setLegalCase(c);
+      setMessages(msgs);
+      // Auto-start: wenn noch keine Nachrichten, KI begrüßt den Nutzer
+      if (msgs.length === 0 && c) {
+        await triggerWelcome(c);
+      }
     } finally {
-      setIsGeneratingDoc(false);
+      setLoading(false);
+    }
+  }, [id]);
+
+  useEffect(() => { loadData(); }, [loadData]);
+
+  const triggerWelcome = async (c: Case) => {
+    if (!GEMINI_API_KEY || !id) return;
+    setSending(true);
+    try {
+      const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+      const result = await ai.models.generateContent({
+        model: 'gemini-2.0-flash',
+        contents: [{ role: 'user', parts: [{ text: 'Bitte analysiere meinen Fall und gib mir eine erste Einschätzung.' }] }],
+        config: { systemInstruction: buildSystemPrompt(c) },
+      });
+      const text = result.text ?? '';
+      const saved = await messageService.addMessage(id, 'assistant', text);
+      setMessages([saved]);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setSending(false);
     }
   };
 
-  return (
-    <DashboardLayout>
-      <div className="space-y-8 pb-20">
-        {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="flex items-center gap-4">
-            <button onClick={() => navigate('/dashboard')} className="p-2 hover:bg-gray-100 rounded-full transition-all">
-              <ArrowLeft className="w-6 h-6 text-gray-500" />
-            </button>
-            <div>
-              <div className="flex items-center gap-3 mb-1">
-                <h1 className="text-2xl font-bold text-[#1a1a2e]">{currentCase.titel}</h1>
-                <span className="px-3 py-1 bg-green-50 text-[#2d6a4f] rounded-full text-[10px] font-bold uppercase tracking-wider border border-green-100">
-                  {currentCase.status.replace(/_/g, ' ')}
-                </span>
-              </div>
-              <p className="text-sm text-gray-500">Fall ID: {currentCase.id} • Erstellt am {format(new Date(currentCase.createdAt), 'dd. MMMM yyyy', { locale: de })}</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <button className="p-2 hover:bg-gray-100 rounded-xl text-gray-400 transition-all"><Share2 className="w-5 h-5" /></button>
-            <button className="p-2 hover:bg-gray-100 rounded-xl text-gray-400 transition-all"><Printer className="w-5 h-5" /></button>
-            <button className="p-2 hover:bg-gray-100 rounded-xl text-gray-400 transition-all"><MoreVertical className="w-5 h-5" /></button>
-          </div>
-        </div>
+  const sendMessage = async () => {
+    if (!input.trim() || sending || !legalCase || !id) return;
+    const userText = input.trim();
+    setInput('');
+    setSending(true);
 
-        <div className="grid lg:grid-cols-3 gap-10">
-          {/* Main Content */}
-          <div className="lg:col-span-2 space-y-10">
-            {/* AI Summary */}
-            <section className="bg-white rounded-[32px] border border-gray-100 overflow-hidden shadow-sm">
-              <div className="bg-[#1a1a2e] p-8 text-white">
-                <div className="flex items-center justify-between mb-6">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-[#2d6a4f] rounded-xl flex items-center justify-center">
-                      <Shield className="w-6 h-6 text-white" />
-                    </div>
-                    <h2 className="text-xl font-bold">AI-Ersteinschätzung</h2>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Confidence Score</p>
-                    <div className="flex items-center gap-2">
-                      <div className="w-24 h-2 bg-white/10 rounded-full overflow-hidden">
-                        <motion.div 
-                          initial={{ width: 0 }}
-                          animate={{ width: `${(currentCase.aiAnalyse?.confidenceScore || 0) * 100}%` }}
-                          className="h-full bg-[#2d6a4f]"
-                        />
-                      </div>
-                      <span className="text-sm font-bold">{(currentCase.aiAnalyse?.confidenceScore || 0) * 100}%</span>
-                    </div>
-                  </div>
-                </div>
-                <p className="text-lg font-serif leading-relaxed text-gray-200">
-                  {currentCase.aiAnalyse?.zusammenfassung}
-                </p>
-              </div>
-              <div className="p-8 grid md:grid-cols-2 gap-8">
-                <div>
-                  <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-4">Rechtliche Einordnung</h3>
-                  <ul className="space-y-3">
-                    {currentCase.aiAnalyse?.rechtlicheEinordnung.rechte.map((r, i) => (
-                      <li key={i} className="flex items-start gap-3 text-sm text-[#1a1a2e]">
-                        <CheckCircle2 className="w-5 h-5 text-[#2d6a4f] flex-shrink-0" />
-                        {r}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-4">Anwendbare Gesetze</h3>
-                  <div className="flex flex-wrap gap-2">
-                    {currentCase.aiAnalyse?.rechtlicheEinordnung.anwendbaresRecht.map((g, i) => (
-                      <span key={i} className="px-3 py-1 bg-gray-50 text-gray-500 rounded-full text-xs font-bold border border-gray-100">
-                        {g}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </section>
+    // Optimistisch User-Nachricht zeigen
+    const tempUserMsg: Message = {
+      id: 'temp-user',
+      case_id: id,
+      user_id: 'me',
+      role: 'user',
+      content: userText,
+      created_at: new Date().toISOString(),
+    };
+    setMessages(prev => [...prev, tempUserMsg]);
 
-            {/* Action Options */}
-            <section className="space-y-6">
-              <h2 className="text-xl font-bold text-[#1a1a2e]">Deine nächsten Schritte</h2>
-              <div className="grid sm:grid-cols-2 gap-4">
-                {currentCase.aiAnalyse?.handlungsoptionen.map((opt, i) => (
-                  <div key={i} className={cn(
-                    "p-8 rounded-[32px] border transition-all flex flex-col",
-                    opt.empfohlen ? "bg-white border-[#2d6a4f] shadow-xl shadow-green-900/5 ring-1 ring-[#2d6a4f]" : "bg-white border-gray-100"
-                  )}>
-                    {opt.empfohlen && (
-                      <span className="bg-[#2d6a4f] text-white text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-widest self-start mb-6">Empfohlen</span>
-                    )}
-                    <h3 className="text-lg font-bold text-[#1a1a2e] mb-2">{opt.titel}</h3>
-                    <p className="text-sm text-gray-500 mb-8 flex-grow">{opt.beschreibung}</p>
-                    <button 
-                      onClick={() => opt.automatisierbar ? handleGenerateDoc(opt.titel) : null}
-                      className={cn(
-                        "w-full py-4 rounded-full font-bold text-sm transition-all flex items-center justify-center gap-2 group",
-                        opt.empfohlen ? "bg-[#2d6a4f] text-white hover:bg-[#1b4332]" : "bg-[#1a1a2e] text-white hover:bg-black"
-                      )}
-                    >
-                      {isGeneratingDoc ? <Loader2 className="w-5 h-5 animate-spin" /> : (
-                        <>
-                          {opt.automatisierbar ? 'Dokument erstellen' : 'Anwalt anfragen'}
-                          <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                        </>
-                      )}
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </section>
+    try {
+      // User-Nachricht speichern
+      const savedUser = await messageService.addMessage(id, 'user', userText);
 
-            {/* Documents */}
-            <section className="space-y-6">
-              <div className="flex items-center justify-between">
-                <h2 className="text-xl font-bold text-[#1a1a2e]">Generierte Dokumente</h2>
-              </div>
-              <div className="space-y-4">
-                {currentCase.generatedDocuments.length > 0 ? (
-                  currentCase.generatedDocuments.map(doc => (
-                    <div key={doc.id} className="p-6 bg-white rounded-[24px] border border-gray-100 flex items-center justify-between group hover:border-[#2d6a4f] transition-all">
-                      <div className="flex items-center gap-6">
-                        <div className="w-14 h-14 bg-gray-50 rounded-2xl flex items-center justify-center text-gray-400 group-hover:text-[#2d6a4f] transition-colors">
-                          <FileText className="w-7 h-7" />
-                        </div>
-                        <div>
-                          <h4 className="font-bold text-[#1a1a2e]">{doc.titel}</h4>
-                          <div className="flex items-center gap-3 mt-1">
-                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{format(new Date(doc.createdAt), 'dd.MM.yyyy', { locale: de })}</span>
-                            <span className="w-1 h-1 bg-gray-300 rounded-full" />
-                            <span className="text-[10px] font-bold text-[#2d6a4f] uppercase tracking-widest">{doc.reviewStatus.replace('_', ' ')}</span>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button 
-                          onClick={() => setSelectedDoc(doc)}
-                          className="px-4 py-2 rounded-xl text-sm font-bold text-[#1a1a2e] hover:bg-gray-50 transition-all"
-                        >
-                          Vorschau
-                        </button>
-                        <button className="p-2 hover:bg-gray-50 rounded-xl text-gray-400 hover:text-[#2d6a4f] transition-all">
-                          <Download className="w-5 h-5" />
-                        </button>
-                        <button className="p-2 hover:bg-gray-50 rounded-xl text-gray-400 hover:text-blue-600 transition-all">
-                          <Mail className="w-5 h-5" />
-                        </button>
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="p-12 text-center bg-gray-50 rounded-[32px] border border-dashed border-gray-200">
-                    <FileText className="w-12 h-12 text-gray-200 mx-auto mb-4" />
-                    <p className="text-sm text-gray-400">Noch keine Dokumente generiert.</p>
-                  </div>
-                )}
-              </div>
-            </section>
-          </div>
+      // Gemini aufrufen
+      const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+      const history = [...messages, savedUser].map(m => ({
+        role: m.role === 'user' ? 'user' as const : 'model' as const,
+        parts: [{ text: m.content }],
+      }));
 
-          {/* Sidebar */}
-          <aside className="space-y-10">
-            {/* Deadlines */}
-            <section className="space-y-6">
-              <h2 className="text-xl font-bold text-[#1a1a2e]">Fristen</h2>
-              <div className="space-y-3">
-                {currentCase.fristen.map(f => (
-                  <div key={f.id} className="p-5 bg-white rounded-[24px] border border-gray-100 shadow-sm relative overflow-hidden group">
-                    <div className={cn(
-                      "absolute top-0 left-0 w-1 h-full",
-                      f.status === 'erledigt' ? "bg-green-500" : "bg-orange-500"
-                    )} />
-                    <div className="flex items-center justify-between mb-3">
-                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{f.type}</span>
-                      {f.status === 'erledigt' && <CheckCircle2 className="w-4 h-4 text-green-500" />}
-                    </div>
-                    <h4 className="font-bold text-[#1a1a2e] mb-1">{f.name}</h4>
-                    <div className="flex items-center gap-2 text-xs text-gray-500">
-                      <Clock className="w-3.5 h-3.5" />
-                      {format(new Date(f.deadline), 'dd. MMMM yyyy', { locale: de })}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </section>
+      const result = await ai.models.generateContent({
+        model: 'gemini-2.0-flash',
+        contents: history,
+        config: { systemInstruction: buildSystemPrompt(legalCase) },
+      });
+      const aiText = result.text ?? 'Entschuldigung, ich konnte keine Antwort generieren.';
 
-            {/* Case Info */}
-            <section className="bg-white rounded-[32px] border border-gray-100 p-8 space-y-6 shadow-sm">
-              <h2 className="text-lg font-bold text-[#1a1a2e]">Fall-Details</h2>
-              <div className="space-y-4">
-                <div>
-                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Sachverhalt</p>
-                  <p className="text-sm text-gray-600 line-clamp-3 italic">"{currentCase.sachverhalt.freitext}"</p>
-                  <button className="text-[10px] font-bold text-[#2d6a4f] mt-1 hover:underline">Mehr anzeigen</button>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Streitwert</p>
-                    <p className="text-sm font-bold text-[#1a1a2e]">{currentCase.sachverhalt.betrag} €</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Datum</p>
-                    <p className="text-sm font-bold text-[#1a1a2e]">{currentCase.sachverhalt.datum}</p>
-                  </div>
-                </div>
-              </div>
-              <div className="pt-6 border-t border-gray-50">
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Dokumente</p>
-                <div className="space-y-2">
-                  {currentCase.dokumente.map(d => (
-                    <div key={d.id} className="flex items-center justify-between text-xs p-2 hover:bg-gray-50 rounded-lg transition-all">
-                      <span className="truncate max-w-[150px] font-medium text-[#1a1a2e]">{d.name}</span>
-                      <Download className="w-3.5 h-3.5 text-gray-400" />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </section>
+      // Antwort speichern
+      const savedAI = await messageService.addMessage(id, 'assistant', aiText);
 
-            {/* Timeline */}
-            <section className="space-y-6">
-              <h2 className="text-xl font-bold text-[#1a1a2e]">Verlauf</h2>
-              <div className="relative space-y-8 before:absolute before:left-4 before:top-2 before:bottom-2 before:w-px before:bg-gray-100">
-                {currentCase.timeline.map((event, i) => (
-                  <div key={i} className="relative pl-10">
-                    <div className={cn(
-                      "absolute left-2 top-1 w-4 h-4 rounded-full border-4 border-white shadow-sm z-10",
-                      event.actor === 'ai' ? "bg-[#2d6a4f]" : "bg-[#1a1a2e]"
-                    )} />
-                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">
-                      {format(new Date(event.timestamp), 'dd. MMM, HH:mm', { locale: de })}
-                    </p>
-                    <h4 className="text-sm font-bold text-[#1a1a2e] mb-1">{event.action}</h4>
-                    <p className="text-xs text-gray-500 leading-relaxed">{event.details}</p>
-                  </div>
-                ))}
-              </div>
-            </section>
-          </aside>
+      // Nachrichten aktualisieren (temp durch echte ersetzen)
+      setMessages(prev => [...prev.filter(m => m.id !== 'temp-user'), savedUser, savedAI]);
+
+      // Status auf in_progress setzen wenn noch offen
+      if (legalCase.status === 'open') {
+        await caseService.updateCase(id, { status: 'in_progress' });
+        setLegalCase(prev => prev ? { ...prev, status: 'in_progress' } : prev);
+      }
+    } catch (e) {
+      console.error(e);
+      setMessages(prev => prev.filter(m => m.id !== 'temp-user'));
+      setInput(userText); // Input wiederherstellen bei Fehler
+    } finally {
+      setSending(false);
+      inputRef.current?.focus();
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (!legalCase) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-slate-500 mb-4">Fall nicht gefunden.</p>
+          <button onClick={() => navigate('/dashboard')} className="text-blue-600 text-sm hover:underline">Zurück zum Dashboard</button>
         </div>
       </div>
+    );
+  }
 
-      {/* Document Preview Modal */}
-      <AnimatePresence>
-        {selectedDoc && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-6 sm:p-10">
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setSelectedDoc(null)}
-              className="absolute inset-0 bg-[#1a1a2e]/80 backdrop-blur-sm"
-            />
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.9, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="relative w-full max-w-5xl bg-white rounded-[40px] shadow-2xl overflow-hidden flex flex-col max-h-full"
-            >
-              <div className="p-8 border-b border-gray-100 flex items-center justify-between bg-[#fafaf8]">
-                <div>
-                  <h3 className="text-2xl font-bold text-[#1a1a2e]">{selectedDoc.titel}</h3>
-                  <p className="text-sm text-gray-500">Vorschau des generierten Dokuments</p>
-                </div>
-                <button onClick={() => setSelectedDoc(null)} className="p-2 hover:bg-gray-200 rounded-full transition-all">
-                  <X className="w-6 h-6 text-gray-400" />
-                </button>
+  return (
+    <div className="h-screen flex flex-col bg-slate-50">
+      {/* Header */}
+      <header className="bg-white border-b border-slate-200 flex-shrink-0">
+        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center gap-3">
+          <button onClick={() => navigate('/dashboard')} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
+            <svg className="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+          <div className="flex-1 min-w-0">
+            <h1 className="font-semibold text-slate-900 text-sm truncate">{legalCase.title}</h1>
+            <div className="flex items-center gap-2 mt-0.5">
+              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[legalCase.status]}`}>
+                {STATUS_LABELS[legalCase.status]}
+              </span>
+              <span className="text-xs text-slate-400">{legalCase.category}</span>
+            </div>
+          </div>
+          <button
+            onClick={() => setShowSidebar(s => !s)}
+            className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+            title="Fall-Details"
+          >
+            <svg className="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </button>
+        </div>
+      </header>
+
+      <div className="flex-1 flex overflow-hidden max-w-5xl w-full mx-auto">
+        {/* Chat area */}
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <div className="flex-1 overflow-y-auto px-4 py-6 space-y-4">
+            {messages.length === 0 && !sending && (
+              <div className="text-center text-slate-400 text-sm py-12">
+                Die KI analysiert deinen Fall…
               </div>
-              
-              <div className="flex-grow overflow-y-auto p-10 grid lg:grid-cols-2 gap-10">
-                {/* Document Content */}
-                <div className="bg-white border border-gray-200 shadow-sm p-12 rounded-lg font-serif text-[#1a1a2e] whitespace-pre-wrap leading-relaxed">
-                  {selectedDoc.inhalt}
-                </div>
-                
-                {/* Plain Language Explanation */}
-                <div className="space-y-8">
-                  <div className="bg-green-50 p-8 rounded-[32px] border border-green-100">
-                    <div className="flex items-center gap-3 mb-4">
-                      <div className="w-10 h-10 bg-[#2d6a4f] rounded-xl flex items-center justify-center">
-                        <MessageSquare className="w-6 h-6 text-white" />
-                      </div>
-                      <h4 className="text-lg font-bold text-[#1a1a2e]">Was bedeutet das?</h4>
+            )}
+            <AnimatePresence>
+              {messages.map((msg) => (
+                <motion.div
+                  key={msg.id}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                >
+                  {msg.role === 'assistant' && (
+                    <div className="w-7 h-7 bg-blue-600 rounded-lg flex items-center justify-center flex-shrink-0 mr-2.5 mt-0.5">
+                      <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" />
+                      </svg>
                     </div>
-                    <p className="text-sm text-gray-700 leading-relaxed italic">
-                      "{selectedDoc.klartextVersion}"
+                  )}
+                  <div className={`max-w-[78%] rounded-2xl px-4 py-3 ${
+                    msg.role === 'user'
+                      ? 'bg-blue-600 text-white text-sm'
+                      : 'bg-white border border-slate-100 text-sm'
+                  }`}>
+                    {msg.role === 'user' ? (
+                      <p className="leading-relaxed">{msg.content}</p>
+                    ) : (
+                      <div className="space-y-0.5">{formatMessage(msg.content)}</div>
+                    )}
+                    <p className={`text-xs mt-2 ${msg.role === 'user' ? 'text-blue-200' : 'text-slate-400'}`}>
+                      {new Date(msg.created_at).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}
                     </p>
                   </div>
+                </motion.div>
+              ))}
+            </AnimatePresence>
 
-                  <div className="space-y-4">
-                    <h4 className="text-sm font-bold text-gray-400 uppercase tracking-widest">Nächste Schritte</h4>
-                    <div className="space-y-3">
-                      {[
-                        "Dokument als PDF herunterladen",
-                        "Per E-Mail an den Händler senden",
-                        "Anwalt zur finalen Prüfung anfragen"
-                      ].map((step, i) => (
-                        <div key={i} className="flex items-center gap-3 p-4 bg-gray-50 rounded-2xl border border-gray-100">
-                          <div className="w-6 h-6 bg-white rounded-full flex items-center justify-center text-[10px] font-bold text-[#1a1a2e] shadow-sm">
-                            {i + 1}
-                          </div>
-                          <span className="text-sm font-medium text-[#1a1a2e]">{step}</span>
-                        </div>
-                      ))}
+            {sending && (
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex justify-start">
+                <div className="w-7 h-7 bg-blue-600 rounded-lg flex items-center justify-center flex-shrink-0 mr-2.5">
+                  <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" />
+                  </svg>
+                </div>
+                <div className="bg-white border border-slate-100 rounded-2xl px-4 py-3">
+                  <div className="flex gap-1 items-center h-5">
+                    {[0, 0.2, 0.4].map(delay => (
+                      <motion.div key={delay} className="w-2 h-2 bg-slate-300 rounded-full"
+                        animate={{ y: [0, -4, 0] }} transition={{ duration: 0.6, delay, repeat: Infinity }} />
+                    ))}
+                  </div>
+                </div>
+              </motion.div>
+            )}
+            <div ref={bottomRef} />
+          </div>
+
+          {/* Input */}
+          <div className="flex-shrink-0 bg-white border-t border-slate-200 px-4 py-3">
+            <div className="flex items-end gap-2">
+              <textarea
+                ref={inputRef}
+                value={input}
+                onChange={e => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="Nachricht schreiben… (Enter zum Senden, Shift+Enter für neue Zeile)"
+                rows={1}
+                disabled={sending}
+                className="flex-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-50 transition-all resize-none disabled:opacity-50"
+                style={{ minHeight: '48px', maxHeight: '140px' }}
+                onInput={e => {
+                  const t = e.target as HTMLTextAreaElement;
+                  t.style.height = 'auto';
+                  t.style.height = Math.min(t.scrollHeight, 140) + 'px';
+                }}
+              />
+              <button
+                onClick={sendMessage}
+                disabled={!input.trim() || sending}
+                className="w-11 h-11 bg-blue-600 hover:bg-blue-700 text-white rounded-xl flex items-center justify-center transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                </svg>
+              </button>
+            </div>
+            <p className="text-xs text-slate-400 mt-2 text-center">
+              Legal Buddy gibt allgemeine Rechtsinformationen — keine Rechtsberatung
+            </p>
+          </div>
+        </div>
+
+        {/* Sidebar: Fall-Details */}
+        <AnimatePresence>
+          {showSidebar && (
+            <motion.aside
+              initial={{ width: 0, opacity: 0 }}
+              animate={{ width: 280, opacity: 1 }}
+              exit={{ width: 0, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="flex-shrink-0 border-l border-slate-200 bg-white overflow-hidden"
+            >
+              <div className="p-5 w-[280px]">
+                <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4">Fall-Details</h3>
+                <div className="space-y-4 text-sm">
+                  <div>
+                    <p className="text-xs text-slate-400 mb-1">Kategorie</p>
+                    <p className="font-medium text-slate-900">{legalCase.category}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-400 mb-1">Status</p>
+                    <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${STATUS_COLORS[legalCase.status]}`}>
+                      {STATUS_LABELS[legalCase.status]}
+                    </span>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-400 mb-1">Dringlichkeit</p>
+                    <p className="font-medium text-slate-900">{URGENCY_LABELS[legalCase.urgency]}</p>
+                  </div>
+                  {legalCase.description && (
+                    <div>
+                      <p className="text-xs text-slate-400 mb-1">Beschreibung</p>
+                      <p className="text-slate-700 text-xs leading-relaxed">{legalCase.description}</p>
                     </div>
+                  )}
+                  <div>
+                    <p className="text-xs text-slate-400 mb-1">Erstellt am</p>
+                    <p className="text-slate-700 text-xs">
+                      {new Date(legalCase.created_at).toLocaleDateString('de-DE', { day: '2-digit', month: 'long', year: 'numeric' })}
+                    </p>
+                  </div>
+                  <div className="pt-2 border-t border-slate-100 space-y-2">
+                    {(['in_progress', 'resolved', 'closed'] as const).map(s => (
+                      legalCase.status !== s && (
+                        <button key={s}
+                          onClick={async () => {
+                            await caseService.updateCase(legalCase.id, { status: s });
+                            setLegalCase(prev => prev ? { ...prev, status: s } : prev);
+                          }}
+                          className="w-full text-xs py-2 px-3 border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-600 transition-colors text-left"
+                        >
+                          → Als "{STATUS_LABELS[s]}" markieren
+                        </button>
+                      )
+                    ))}
                   </div>
                 </div>
               </div>
-
-              <div className="p-8 border-t border-gray-100 bg-[#fafaf8] flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <Shield className="w-5 h-5 text-[#2d6a4f]" />
-                  <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">AI-Generiert & Anwaltlich verantwortet</span>
-                </div>
-                <div className="flex items-center gap-4">
-                  <button className="px-8 py-4 rounded-full font-bold text-[#1a1a2e] hover:bg-gray-200 transition-all">
-                    Bearbeiten
-                  </button>
-                  <button className="bg-[#2d6a4f] text-white px-8 py-4 rounded-full font-bold hover:bg-[#1b4332] transition-all shadow-xl shadow-green-900/10 flex items-center gap-2">
-                    <Download className="w-5 h-5" />
-                    PDF Herunterladen
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-    </DashboardLayout>
+            </motion.aside>
+          )}
+        </AnimatePresence>
+      </div>
+    </div>
   );
 }
