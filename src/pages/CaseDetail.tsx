@@ -10,7 +10,7 @@ const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY ?? '';
 const STATUS_LABELS: Record<string, string> = {
   open: 'Offen', in_progress: 'In Bearbeitung', resolved: 'Gelöst', closed: 'Abgeschlossen',
 };
-const STATUS_COLORS: Record<string, string> = {
+const STATUS_COLORS: Record<string, string> = 
   open: 'bg-blue-50 text-blue-700', in_progress: 'bg-amber-50 text-amber-700',
   resolved: 'bg-emerald-50 text-emerald-700', closed: 'bg-slate-100 text-slate-600',
 };
@@ -95,7 +95,7 @@ export default function CaseDetail() {
     try {
       const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
       const result = await ai.models.generateContent({
-        model: 'gemini-2.0-flash',
+        model: 'gemini-2.0-flash-001',
         contents: [{ role: 'user', parts: [{ text: 'Bitte analysiere meinen Fall und gib mir eine erste Einschätzung.' }] }],
         config: { systemInstruction: buildSystemPrompt(c) },
       });
@@ -138,7 +138,7 @@ export default function CaseDetail() {
       }));
 
       const result = await ai.models.generateContent({
-        model: 'gemini-2.0-flash',
+        model: 'gemini-2.0-flash-001',
         contents: history,
         config: { systemInstruction: buildSystemPrompt(legalCase) },
       });
