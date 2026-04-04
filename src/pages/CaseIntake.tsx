@@ -2,16 +2,17 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { caseService } from '../services/caseService';
+import { analysisService } from '../services/analysisService';
 
 const CATEGORIES = [
-  { id: 'mietrecht', label: 'Mietrecht', icon: '🏠', desc: 'Kündigung, Mängel, Kaution' },
-  { id: 'arbeitsrecht', label: 'Arbeitsrecht', icon: '💼', desc: 'Kündigung, Abmahnung, Lohn' },
-  { id: 'vertragsrecht', label: 'Vertragsrecht', icon: '📄', desc: 'Kaufverträge, AGB, Widerruf' },
-  { id: 'verbraucherrecht', label: 'Verbraucherrecht', icon: '🛒', desc: 'Gewährleistung, Reklamation' },
-  { id: 'familienrecht', label: 'Familienrecht', icon: '👨‍👩‍👧', desc: 'Unterhalt, Scheidung, Sorgerecht' },
-  { id: 'verkehrsrecht', label: 'Verkehrsrecht', icon: '🚗', desc: 'Unfall, Bußgeld, Führerschein' },
-  { id: 'erbrecht', label: 'Erbrecht', icon: '📜', desc: 'Testament, Erbfolge, Pflichtteil' },
-  { id: 'sonstiges', label: 'Sonstiges', icon: '⚖️', desc: 'Anderes Rechtsgebiet' },
+  { id: 'mietrecht', label: 'Mietrecht', icon: '\u{1F3E0}', desc: 'Kuendigung, Maengel, Kaution' },
+  { id: 'arbeitsrecht', label: 'Arbeitsrecht', icon: '\u{1F4BC}', desc: 'Kuendigung, Abmahnung, Lohn' },
+  { id: 'vertragsrecht', label: 'Vertragsrecht', icon: '\u{1F4C4}', desc: 'Kaufvertraege, AGB, Widerruf' },
+  { id: 'verbraucherrecht', label: 'Verbraucherrecht', icon: '\u{1F6D2}', desc: 'Gewaehrleistung, Reklamation' },
+  { id: 'familienrecht', label: 'Familienrecht', icon: '\u{1F46A}', desc: 'Unterhalt, Scheidung, Sorgerecht' },
+  { id: 'verkehrsrecht', label: 'Verkehrsrecht', icon: '\u{1F697}', desc: 'Unfall, Bussgeld, Fuehrerschein' },
+  { id: 'erbrecht', label: 'Erbrecht', icon: '\u{1F4DC}', desc: 'Testament, Erbfolge, Pflichtteil' },
+  { id: 'sonstiges', label: 'Sonstiges', icon: '\u2696\uFE0F', desc: 'Anderes Rechtsgebiet' },
 ];
 
 const URGENCY_OPTIONS = [
@@ -33,7 +34,6 @@ export default function CaseIntake() {
   const [step, setStep] = useState(1);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
   const [form, setForm] = useState({
     category: '',
     title: '',
@@ -58,7 +58,12 @@ export default function CaseIntake() {
         description: form.description.trim() || undefined,
         urgency: form.urgency,
       });
-      navigate(`/chat/${created.id}`);
+      // Trigger background AI analysis (fire and forget - does not block navigation)
+      analysisService.triggerAnalysisForCase(created).catch(e =>
+        console.error('Background analysis error:', e)
+      );
+      // Navigate to dashboard immediately
+      navigate('/dashboard');
     } catch (err) {
       console.error(err);
       setError('Fall konnte nicht erstellt werden. Bitte versuche es erneut.');
@@ -73,15 +78,23 @@ export default function CaseIntake() {
       {/* Header */}
       <header className="bg-white border-b border-slate-200">
         <div className="max-w-2xl mx-auto px-6 py-4 flex items-center justify-between">
-          <button onClick={() => navigate('/dashboard')} className="flex items-center gap-2 text-slate-500 hover:text-slate-900 transition-colors text-sm">
+          <button
+            onClick={() => navigate('/dashboard')}
+            className="flex items-center gap-2 text-slate-500 hover:text-slate-900 transition-colors text-sm"
+          >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
-            Zurück
+            Zurueck
           </button>
           <div className="flex items-center gap-2">
             {[1, 2, 3].map(s => (
-              <div key={s} className={`h-1.5 rounded-full transition-all duration-300 ${s <= step ? 'bg-blue-600 w-8' : 'bg-slate-200 w-4'}`} />
+              <div
+                key={s}
+                className={`h-1.5 rounded-full transition-all duration-300 ${
+                  s <= step ? 'bg-blue-600 w-8' : 'bg-slate-200 w-4'
+                }`}
+              />
             ))}
           </div>
           <span className="text-xs text-slate-400">Schritt {step} von 3</span>
@@ -90,11 +103,11 @@ export default function CaseIntake() {
 
       <main className="flex-1 max-w-2xl mx-auto w-full px-6 py-10">
         <AnimatePresence mode="wait">
-          {/* Step 1: Kategorie */}
+          {/* Step 1 */}
           {step === 1 && (
             <motion.div key="step1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
               <h1 className="text-2xl font-bold text-slate-900 mb-2">Welches Rechtsgebiet betrifft Ihr Anliegen?</h1>
-              <p className="text-slate-500 text-sm mb-8">Wählen Sie die passende Kategorie aus.</p>
+              <p className="text-slate-500 text-sm mb-8">Waehlen Sie die passende Kategorie aus.</p>
               <div className="grid grid-cols-2 gap-3">
                 {CATEGORIES.map(cat => (
                   <button
@@ -115,7 +128,7 @@ export default function CaseIntake() {
             </motion.div>
           )}
 
-          {/* Step 2: Titel & Beschreibung */}
+          {/* Step 2 */}
           {step === 2 && (
             <motion.div key="step2" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
               <div className="flex items-center gap-2 mb-6">
@@ -123,7 +136,7 @@ export default function CaseIntake() {
                 <span className="text-sm font-medium text-slate-500">{selectedCategory?.label}</span>
               </div>
               <h1 className="text-2xl font-bold text-slate-900 mb-2">Beschreiben Sie Ihr Anliegen</h1>
-              <p className="text-slate-500 text-sm mb-8">Je mehr Details, desto besser kann die KI helfen.</p>
+              <p className="text-slate-500 text-sm mb-8">Je mehr Details, desto praeziser kann die KI helfen.</p>
               <div className="space-y-5">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1.5">
@@ -133,7 +146,7 @@ export default function CaseIntake() {
                     type="text"
                     value={form.title}
                     onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
-                    placeholder="z.B. Unrechtmäßige Kündigung durch Vermieter"
+                    placeholder="z.B. Unrechtmaessige Kuendigung durch Vermieter"
                     className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-50 transition-all"
                     maxLength={120}
                   />
@@ -153,11 +166,11 @@ export default function CaseIntake() {
             </motion.div>
           )}
 
-          {/* Step 3: Dringlichkeit */}
+          {/* Step 3 */}
           {step === 3 && (
             <motion.div key="step3" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
               <h1 className="text-2xl font-bold text-slate-900 mb-2">Wie dringend ist Ihr Anliegen?</h1>
-              <p className="text-slate-500 text-sm mb-8">Dies hilft uns, Prioritäten richtig zu setzen.</p>
+              <p className="text-slate-500 text-sm mb-8">Dies hilft uns, Prioritaeten richtig zu setzen.</p>
               <div className="space-y-3 mb-8">
                 {URGENCY_OPTIONS.map(opt => (
                   <button
@@ -173,8 +186,8 @@ export default function CaseIntake() {
                 ))}
               </div>
 
-              {/* Summary */}
-              <div className="bg-white rounded-2xl border border-slate-100 p-5">
+              {/* Zusammenfassung + Info-Box */}
+              <div className="bg-white rounded-2xl border border-slate-100 p-5 mb-4">
                 <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Zusammenfassung</h3>
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
@@ -186,6 +199,16 @@ export default function CaseIntake() {
                     <span className="font-medium text-slate-900 truncate ml-4 max-w-xs text-right">{form.title}</span>
                   </div>
                 </div>
+              </div>
+
+              <div className="bg-blue-50 rounded-2xl border border-blue-100 p-4 flex gap-3">
+                <svg className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <p className="text-xs text-blue-700 leading-relaxed">
+                  Nach dem Erstellen wird Ihr Fall von unserer KI analysiert und anschliessend von einem Rechtsexperten geprueft.
+                  Sie erhalten eine fundierte Einschaetzung direkt in Ihrer Fallakte.
+                </p>
               </div>
 
               {error && (
@@ -204,7 +227,7 @@ export default function CaseIntake() {
               onClick={() => setStep(s => s - 1)}
               className="flex-1 py-3.5 border border-slate-200 text-slate-700 text-sm font-medium rounded-xl hover:bg-slate-50 transition-colors"
             >
-              Zurück
+              Zurueck
             </button>
           )}
           {step < 3 ? (
@@ -227,7 +250,7 @@ export default function CaseIntake() {
                   Wird erstellt…
                 </>
               ) : (
-                'Fall erstellen & KI starten'
+                'Fall erstellen'
               )}
             </button>
           )}
