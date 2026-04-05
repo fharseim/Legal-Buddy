@@ -1,7 +1,7 @@
 /**
  * legalSearchService – client-side RAG search for German legal documents
  *
- * 1. Embeds a query text using Google text-embedding-004 (v1 REST API, 768 dims)
+ * 1. Embeds a query text using Google embedding-001 (v1 REST API, 768-dim)
  * 2. Calls Supabase RPC `search_legal_documents` (pgvector cosine similarity)
  * 3. Returns top-k relevant court decisions and law paragraphs
  */
@@ -9,6 +9,7 @@
 import { supabase } from '../lib/supabase';
 
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY ?? '';
+const EMBED_MODEL    = 'embedding-001';  // stable 768-dim embedding model
 
 export interface LegalDocument {
   id: string;
@@ -25,18 +26,16 @@ export interface LegalDocument {
 }
 
 /**
- * Embed a text string using Gemini v1 REST API (text-embedding-004, 768-dim).
- * Uses direct REST call to avoid v1beta SDK limitation.
+ * Embed text using Gemini v1 REST API directly (embedding-001, 768-dim).
  */
 async function embedText(text: string): Promise<number[]> {
   if (!GEMINI_API_KEY) throw new Error('[legalSearchService] VITE_GEMINI_API_KEY not set');
 
-  const url = `https://generativelanguage.googleapis.com/v1/models/text-embedding-004:embedContent?key=${GEMINI_API_KEY}`;
+  const url = `https://generativelanguage.googleapis.com/v1/models/${EMBED_MODEL}:embedContent?key=${GEMINI_API_KEY}`;
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      model: 'models/text-embedding-004',
       content: { parts: [{ text }] },
     }),
   });
@@ -52,9 +51,6 @@ async function embedText(text: string): Promise<number[]> {
   return values;
 }
 
-/**
- * Search the legal_documents table for documents similar to `queryText`.
- */
 export async function searchLegalDocuments(
   queryText: string,
   options: {
@@ -100,9 +96,6 @@ export async function searchLegalDocuments(
   }
 }
 
-/**
- * Format search results as a RAG context block for injection into a Gemini prompt.
- */
 export function formatRagContext(docs: LegalDocument[]): string {
   if (!docs.length) return '';
 
@@ -134,9 +127,6 @@ export function formatRagContext(docs: LegalDocument[]): string {
   ].join('\n');
 }
 
-/**
- * Convenience: get RAG context string ready for prompt injection.
- */
 export async function getRagContextForCase(
   caseDescription: string,
   legalArea?: string
