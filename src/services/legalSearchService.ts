@@ -1,8 +1,8 @@
 /**
  * legalSearchService – client-side RAG search for German legal documents
  *
- * 1. Embeds query using gemini-embedding-001 (v1beta, 768-dim via outputDimensionality)
- * 2. Calls Supabase RPC `search_legal_documents` (pgvector cosine similarity)
+ * 1. Embeds a query text using Google gemini-embedding-001 (768 dims via v1beta)
+ * 2. Calls Supabase RPC search_legal_documents (pgvector cosine similarity)
  * 3. Returns top-k relevant court decisions and law paragraphs
  */
 
@@ -26,9 +26,11 @@ export interface LegalDocument {
   similarity: number;
 }
 
+/**
+ * Embed a text string using gemini-embedding-001 via v1beta REST API.
+ * Returns a 768-dimensional float array.
+ */
 async function embedText(text: string): Promise<number[]> {
-  if (!GEMINI_API_KEY) throw new Error('[legalSearchService] VITE_GEMINI_API_KEY not set');
-
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${EMBED_MODEL}:embedContent?key=${GEMINI_API_KEY}`;
   const res = await fetch(url, {
     method: 'POST',
@@ -38,18 +40,21 @@ async function embedText(text: string): Promise<number[]> {
       outputDimensionality: EMBED_DIMS,
     }),
   });
-
   if (!res.ok) {
     const errText = await res.text();
     throw new Error(`[legalSearchService] Embed API ${res.status}: ${errText.slice(0, 200)}`);
   }
-
   const data = await res.json();
   const values: number[] = data?.embedding?.values ?? [];
-  if (!values.length) throw new Error('[legalSearchService] embedContent returned empty vector');
+  if (!values.length) {
+    throw new Error('[legalSearchService] embedContent returned empty vector');
+  }
   return values;
 }
 
+/**
+ * Search the legal_documents table for documents similar to queryText.
+ */
 export async function searchLegalDocuments(
   queryText: string,
   options: {
@@ -65,7 +70,12 @@ export async function searchLegalDocuments(
     return [];
   }
 
-  const { matchCount = 8, matchThreshold = 0.65, filterArea, filterDocType } = options;
+  const {
+    matchCount     = 8,
+    matchThreshold = 0.5,   // lowered from 0.63 – corpus similarity scores are ~0.55–0.65
+    filterArea,
+    filterDocType,
+  } = options;
 
   try {
     const embedding = await embedText(queryText);
@@ -90,6 +100,9 @@ export async function searchLegalDocuments(
   }
 }
 
+/**
+ * Format search results as a RAG context block for injection into a Gemini prompt.
+ */
 export function formatRagContext(docs: LegalDocument[]): string {
   if (!docs.length) return '';
 
@@ -111,8 +124,8 @@ export function formatRagContext(docs: LegalDocument[]): string {
     '## RELEVANTE RECHTSPRECHUNG UND GESETZE (RAG-Kontext)',
     '',
     'Die folgenden Quellen wurden automatisch aus einer Datenbank mit deutschen',
-    'Gerichtsentscheidungen und Gesetzen abgerufen und sind inhaltlich relevant fuer diesen Fall.',
-    'Nutze sie als Grundlage fuer praezise Paragraphen-Zitate und Rechtsprechungshinweise.',
+    'Gerichtsentscheidungen abgerufen und sind inhaltlich relevant fuer diesen Fall.',
+    'Nutze sie als Grundlage fuer praezise Zitate und Rechtsprechungshinweise.',
     '',
     ...sections,
     '',
@@ -121,6 +134,10 @@ export function formatRagContext(docs: LegalDocument[]): string {
   ].join('\n');
 }
 
+/**
+ * Convenience: get RAG context string ready for prompt injection.
+ * Returns empty string on error (graceful degradation).
+ */
 export async function getRagContextForCase(
   caseDescription: string,
   legalArea?: string
@@ -128,9 +145,10 @@ export async function getRagContextForCase(
   try {
     const docs = await searchLegalDocuments(caseDescription, {
       matchCount:     8,
-      matchThreshold: 0.63,
+      matchThreshold: 0.5,
       filterArea:     legalArea,
     });
+    console.log(`[legalSearchService] RAG found ${docs.length} docs (threshold=0.5)`);
     return formatRagContext(docs);
   } catch {
     return '';
