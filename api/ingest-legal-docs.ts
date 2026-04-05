@@ -2,7 +2,7 @@
  * POST /api/ingest-legal-docs
  *
  * Fetches German court decisions from Open Legal Data (openlegaldata.io),
- * embeds them with Google text-embedding-004 (v1 REST API), and stores
+ * embeds them with Google embedding-001 (v1 REST API, 768-dim), and stores
  * them in Supabase pgvector.
  *
  * Body: { area?: string, count?: number, offset?: number }
@@ -11,24 +11,20 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
 
-// ── Config ────────────────────────────────────────────────────────────────────
 const SUPABASE_URL     = process.env.SUPABASE_URL     ?? process.env.VITE_SUPABASE_URL ?? '';
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
 const GEMINI_API_KEY   = process.env.GEMINI_API_KEY   ?? process.env.VITE_GEMINI_API_KEY ?? '';
 const INGESTION_SECRET = process.env.INGESTION_SECRET ?? '';
 
 const OLDP_BASE   = 'https://de.openlegaldata.io/api';
+const EMBED_MODEL = 'embedding-001';   // stable 768-dim embedding model
 const MAX_CONTENT = 1800;
 
-// ── Types ─────────────────────────────────────────────────────────────────────
 interface OldpCase {
   id: number;
   slug: string;
   file_number: string;
   date: string;
-  created_at: string;
-  updated_at: string;
-  type: string | null;
   content: string;
   source_url: string | null;
   court: { id: number; name: string; code: string; jurisdiction: string; level: string; };
@@ -40,8 +36,6 @@ interface OldpResponse {
   next: string | null;
   results: OldpCase[];
 }
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function cleanText(raw: string): string {
   return raw
@@ -73,20 +67,18 @@ function mapLegalArea(tags: string[]): string {
   return tags[0] ?? 'Allgemeines Recht';
 }
 
-/** Embed using Gemini v1 REST API directly (avoids v1beta SDK limitation) */
 async function embedText(apiKey: string, text: string): Promise<number[]> {
-  const url = `https://generativelanguage.googleapis.com/v1/models/text-embedding-004:embedContent?key=${apiKey}`;
+  const url = `https://generativelanguage.googleapis.com/v1/models/${EMBED_MODEL}:embedContent?key=${apiKey}`;
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      model: 'models/text-embedding-004',
       content: { parts: [{ text }] },
     }),
   });
   if (!res.ok) {
     const errText = await res.text();
-    throw new Error(`Embed API ${res.status}: ${errText.slice(0, 200)}`);
+    throw new Error(`Embed API ${res.status}: ${errText.slice(0, 300)}`);
   }
   const data = await res.json();
   const values: number[] = data?.embedding?.values ?? [];
@@ -94,7 +86,6 @@ async function embedText(apiKey: string, text: string): Promise<number[]> {
   return values;
 }
 
-/** Fetch one page of cases from Open Legal Data */
 async function fetchCases(search: string, limit: number, offset: number): Promise<OldpResponse> {
   const params = new URLSearchParams({
     search, limit: String(limit), offset: String(offset), format: 'json',
@@ -106,7 +97,6 @@ async function fetchCases(search: string, limit: number, offset: number): Promis
   return res.json();
 }
 
-// ── Main handler ──────────────────────────────────────────────────────────────
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
@@ -122,10 +112,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const offset = Number(req.body?.offset ?? 0);
 
   const sb = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
-
-  const searchQuery = area
-    ? `${area} Urteil`
-    : 'Urteil Schadensersatz Vertrag Kuendigung';
+  const searchQuery = area ? `${area} Urteil` : 'Urteil Schadensersatz Vertrag Kuendigung';
 
   let inserted = 0;
   let skipped  = 0;
@@ -139,12 +126,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const raw = doc.content ?? '';
         if (!raw.trim()) { skipped++; continue; }
 
-        const content    = cleanText(raw);
-        const courtName  = doc.court?.name ?? 'Unbekanntes Gericht';
-        const legalArea  = mapLegalArea(doc.tags ?? []);
-        const docUrl     = doc.source_url ?? `https://de.openlegaldata.io/case/${doc.slug}/`;
+        const content   = cleanText(raw);
+        const courtName = doc.court?.name ?? 'Unbekanntes Gericht';
+        const legalArea = mapLegalArea(doc.tags ?? []);
+        const docUrl    = doc.source_url ?? `https://de.openlegaldata.io/case/${doc.slug}/`;
 
-        const textToEmbed = `${courtName} ${doc.date} ${doc.file_number}\n\nRechtsgebiet: ${legalArea}\n\n${content}`;
+        const textToEmbed = `${courtName} ${doc.date} ${doc.file_number}\nRechtsgebiet: ${legalArea}\n${content}`;
         const embedding   = await embedText(GEMINI_API_KEY, textToEmbed);
 
         const { error } = await sb.from('legal_documents').upsert({
