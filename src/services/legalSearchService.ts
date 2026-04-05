@@ -1,8 +1,14 @@
-import { GoogleGenAI } from '@google/genai';
+/**
+ * legalSearchService – client-side RAG search for German legal documents
+ *
+ * 1. Embeds a query text using Google text-embedding-004 (v1 REST API, 768 dims)
+ * 2. Calls Supabase RPC `search_legal_documents` (pgvector cosine similarity)
+ * 3. Returns top-k relevant court decisions and law paragraphs
+ */
+
 import { supabase } from '../lib/supabase';
 
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY ?? '';
-const EMBED_MODEL    = 'text-embedding-004';
 
 export interface LegalDocument {
   id: string;
@@ -18,16 +24,37 @@ export interface LegalDocument {
   similarity: number;
 }
 
+/**
+ * Embed a text string using Gemini v1 REST API (text-embedding-004, 768-dim).
+ * Uses direct REST call to avoid v1beta SDK limitation.
+ */
 async function embedText(text: string): Promise<number[]> {
-  const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const result = await (ai.models as any).embedContent({ model: EMBED_MODEL, contents: text });
-  const values: number[] =
-    result?.embeddings?.[0]?.values ?? result?.embedding?.values ?? [];
+  if (!GEMINI_API_KEY) throw new Error('[legalSearchService] VITE_GEMINI_API_KEY not set');
+
+  const url = `https://generativelanguage.googleapis.com/v1/models/text-embedding-004:embedContent?key=${GEMINI_API_KEY}`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'models/text-embedding-004',
+      content: { parts: [{ text }] },
+    }),
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`[legalSearchService] Embed API ${res.status}: ${errText.slice(0, 200)}`);
+  }
+
+  const data = await res.json();
+  const values: number[] = data?.embedding?.values ?? [];
   if (!values.length) throw new Error('[legalSearchService] embedContent returned empty vector');
   return values;
 }
 
+/**
+ * Search the legal_documents table for documents similar to `queryText`.
+ */
 export async function searchLegalDocuments(
   queryText: string,
   options: {
@@ -43,18 +70,29 @@ export async function searchLegalDocuments(
     return [];
   }
 
-  const { matchCount = 8, matchThreshold = 0.65, filterArea, filterDocType } = options;
+  const {
+    matchCount     = 8,
+    matchThreshold = 0.65,
+    filterArea,
+    filterDocType,
+  } = options;
 
   try {
     const embedding = await embedText(queryText);
+
     const { data, error } = await supabase.rpc('search_legal_documents', {
-      query_embedding: embedding,
-      match_threshold: matchThreshold,
-      match_count:     matchCount,
-      filter_area:     filterArea ?? null,
-      filter_doc_type: filterDocType ?? null,
+      query_embedding:  embedding,
+      match_threshold:  matchThreshold,
+      match_count:      matchCount,
+      filter_area:      filterArea ?? null,
+      filter_doc_type:  filterDocType ?? null,
     });
-    if (error) { console.error('[legalSearchService] RPC error:', error.message); return []; }
+
+    if (error) {
+      console.error('[legalSearchService] RPC error:', error.message);
+      return [];
+    }
+
     return (data ?? []) as LegalDocument[];
   } catch (err) {
     console.error('[legalSearchService] Search failed:', err);
@@ -62,6 +100,9 @@ export async function searchLegalDocuments(
   }
 }
 
+/**
+ * Format search results as a RAG context block for injection into a Gemini prompt.
+ */
 export function formatRagContext(docs: LegalDocument[]): string {
   if (!docs.length) return '';
 
@@ -83,7 +124,8 @@ export function formatRagContext(docs: LegalDocument[]): string {
     '## RELEVANTE RECHTSPRECHUNG UND GESETZE (RAG-Kontext)',
     '',
     'Die folgenden Quellen wurden automatisch aus einer Datenbank mit deutschen',
-    'Gerichtsentscheidungen abgerufen. Nutze sie als Grundlage fuer praezise Zitate.',
+    'Gerichtsentscheidungen und Gesetzen abgerufen und sind inhaltlich relevant fuer diesen Fall.',
+    'Nutze sie als Grundlage fuer praezise Paragraphen-Zitate und Rechtsprechungshinweise.',
     '',
     ...sections,
     '',
@@ -92,13 +134,18 @@ export function formatRagContext(docs: LegalDocument[]): string {
   ].join('\n');
 }
 
+/**
+ * Convenience: get RAG context string ready for prompt injection.
+ */
 export async function getRagContextForCase(
   caseDescription: string,
   legalArea?: string
 ): Promise<string> {
   try {
     const docs = await searchLegalDocuments(caseDescription, {
-      matchCount: 8, matchThreshold: 0.63, filterArea: legalArea,
+      matchCount:     8,
+      matchThreshold: 0.63,
+      filterArea:     legalArea,
     });
     return formatRagContext(docs);
   } catch {
