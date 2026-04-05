@@ -1,7 +1,7 @@
 /**
  * legalSearchService – client-side RAG search for German legal documents
  *
- * 1. Embeds a query text using Google embedding-001 (v1 REST API, 768-dim)
+ * 1. Embeds query using gemini-embedding-001 (v1beta, 768-dim via outputDimensionality)
  * 2. Calls Supabase RPC `search_legal_documents` (pgvector cosine similarity)
  * 3. Returns top-k relevant court decisions and law paragraphs
  */
@@ -9,7 +9,8 @@
 import { supabase } from '../lib/supabase';
 
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY ?? '';
-const EMBED_MODEL    = 'embedding-001';  // stable 768-dim embedding model
+const EMBED_MODEL    = 'gemini-embedding-001';
+const EMBED_DIMS     = 768;
 
 export interface LegalDocument {
   id: string;
@@ -25,18 +26,16 @@ export interface LegalDocument {
   similarity: number;
 }
 
-/**
- * Embed text using Gemini v1 REST API directly (embedding-001, 768-dim).
- */
 async function embedText(text: string): Promise<number[]> {
   if (!GEMINI_API_KEY) throw new Error('[legalSearchService] VITE_GEMINI_API_KEY not set');
 
-  const url = `https://generativelanguage.googleapis.com/v1/models/${EMBED_MODEL}:embedContent?key=${GEMINI_API_KEY}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${EMBED_MODEL}:embedContent?key=${GEMINI_API_KEY}`;
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       content: { parts: [{ text }] },
+      outputDimensionality: EMBED_DIMS,
     }),
   });
 
@@ -66,12 +65,7 @@ export async function searchLegalDocuments(
     return [];
   }
 
-  const {
-    matchCount     = 8,
-    matchThreshold = 0.65,
-    filterArea,
-    filterDocType,
-  } = options;
+  const { matchCount = 8, matchThreshold = 0.65, filterArea, filterDocType } = options;
 
   try {
     const embedding = await embedText(queryText);
