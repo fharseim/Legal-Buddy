@@ -2,6 +2,7 @@ import { GoogleGenAI } from '@google/genai';
 import { supabase } from '../lib/supabase';
 import { Case } from './caseService';
 import { messageService } from './messageService';
+import { getRagContextForCase } from './legalSearchService';
 
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY ?? '';
 
@@ -36,8 +37,12 @@ const URGENCY_LABELS: Record<string, string> = {
   low: 'Niedrig', normal: 'Normal', high: 'Hoch', urgent: 'Dringend',
 };
 
-function buildPass1Prompt(c: Case): string {
-  return 'Du bist ein erfahrener deutscher Rechtsanwalt mit Spezialisierung auf ' + c.category + '.\n\n'
+function buildPass1Prompt(c: Case, ragContext: string): string {
+  return (
+    'Du bist ein erfahrener deutscher Rechtsanwalt mit Spezialisierung auf ' + c.category + '.\n\n'
+    + (ragContext
+      ? ragContext + '\n\nNUTZE DIE OBEN GENANNTE RECHTSPRECHUNG als konkrete Belege.\n\n'
+      : '')
     + 'MANDAT:\n'
     + 'Titel: ' + c.title + '\n'
     + 'Rechtsgebiet: ' + c.category + '\n'
@@ -47,48 +52,46 @@ function buildPass1Prompt(c: Case): string {
     + '## 1. Sachverhaltserfassung\n'
     + 'Fasse den Sachverhalt in juristischer Sprache zusammen.\n\n'
     + '## 2. Rechtliche Einordnung\n'
-    + 'Welche Gesetze, Paragraphen und ggf. Rechtsprechung (BGH, OLG) sind relevant? Zitiere praezise.\n\n'
+    + 'Welche Gesetze, Paragraphen und Rechtsprechung sind relevant? '
+    + 'Zitiere praezise - nutze die bereitgestellten Entscheidungen wenn treffend.\n\n'
     + '## 3. Rechtslage und Bewertung\n'
-    + 'Wie ist die rechtliche Situation des Mandanten? Staerken und Schwaechen des Falls.\n\n'
+    + 'Staerken und Schwaechen des Falls.\n\n'
     + '## 4. Konkrete Handlungsempfehlungen\n'
     + 'Schritt-fuer-Schritt was der Mandant jetzt tun sollte.\n\n'
     + '## 5. Wichtige Fristen\n'
-    + 'Welche Fristen muessen beachtet werden? Mit konkreten Zeitangaben.\n\n'
+    + 'Welche Fristen muessen beachtet werden?\n\n'
     + '## 6. Fehlende Informationen\n'
     + 'Welche Informationen fehlen fuer eine vollstaendige Bewertung?\n\n'
     + '## 7. Confidence Score\n'
-    + 'Wie sicher bist du bei dieser Analyse auf einer Skala von 1-10?\n'
-    + 'Antworte mit: SCORE: X (dann ein Satz Begruendung)';
+    + 'Wie sicher bist du? Antworte mit: SCORE: X (dann ein Satz Begruendung)'
+  );
 }
 
 function buildPass2Prompt(pass1: string, c: Case): string {
-  return 'Du bist ein zweiter unabhaengiger Anwalt und Qualitaetspruefer.\n\n'
-    + 'Rechtsgebiet: ' + c.category + '\n'
-    + 'Titel: ' + c.title + '\n\n'
+  return (
+    'Du bist ein zweiter unabhaengiger Anwalt und Qualitaetspruefer.\n\n'
+    + 'Rechtsgebiet: ' + c.category + '\nTitel: ' + c.title + '\n\n'
     + 'ANALYSE DES KOLLEGEN:\n' + pass1 + '\n\n'
-    + 'DEINE AUFGABE - Qualitaetspruefung:\n\n'
     + '## Rechtliche Korrektheit\n'
-    + 'Sind die zitierten Paragraphen und Gesetze korrekt und vollstaendig?\n\n'
-    + '## Fehlende Aspekte\n'
-    + 'Fehlen wichtige Rechtsbereiche, Fristen oder Handlungsoptionen?\n\n'
+    + 'Sind die zitierten Paragraphen und Gerichtsentscheidungen korrekt?\n\n'
+    + '## Fehlende Aspekte\nFehlen wichtige Rechtsbereiche oder Urteile?\n\n'
     + '## Korrekturen und Ergaenzungen\n'
-    + 'Liste konkrete Korrekturen oder Ergaenzungen auf.\n\n'
-    + '## Finales Urteil\n'
-    + 'GENEHMIGT / GENEHMIGT_MIT_ANMERKUNGEN / UEBERARBEITUNG_ERFORDERLICH';
+    + '## Finales Urteil\nGENEHMIGT / GENEHMIGT_MIT_ANMERKUNGEN / UEBERARBEITUNG_ERFORDERLICH'
+  );
 }
 
 function buildFinalPrompt(pass1: string, pass2: string): string {
-  return 'Du bist ein leitender Anwalt. Erstelle die FINALE bereinigte Analyse fuer den Mandanten.\n'
+  return (
+    'Du bist ein leitender Anwalt. Erstelle die FINALE bereinigte Analyse fuer den Mandanten.\n'
     + 'Integriere alle Korrekturen aus der Qualitaetspruefung.\n\n'
-    + 'ERSTANALYSE:\n' + pass1 + '\n\n'
-    + 'QUALITAETSPRUEFUNG:\n' + pass2 + '\n\n'
+    + 'ERSTANALYSE:\n' + pass1 + '\n\nQUALITAETSPRUEFUNG:\n' + pass2 + '\n\n'
     + 'ANFORDERUNGEN:\n'
     + '- Klar und verstaendlich fuer Laien\n'
     + '- Alle Paragraphen-Zitate korrekt\n'
+    + '- Gerichtsentscheidungen konkret benennen (Aktenzeichen, Gericht, Datum)\n'
     + '- Konkrete, umsetzbare Handlungsempfehlungen\n'
-    + '- Strukturiert mit klaren Abschnitten\n'
-    + '- Schlusshinweis: Dies ist eine erste Rechtsinformation, kein Ersatz fuer individuelle Anwaltsberatung.\n\n'
-    + 'Schreibe die finale Analyse jetzt:';
+    + '- Schlusshinweis: Dies ist eine erste Rechtsinformation, kein Ersatz fuer individuelle Anwaltsberatung.'
+  );
 }
 
 function extractConfidenceScore(text: string): number {
@@ -102,23 +105,32 @@ function extractQuestions(text: string): string[] {
   if (!sectionMatch) return [];
   const items = sectionMatch[1].match(/^[-*\d.]+\s+(.+)$/gm);
   if (!items) return [];
-  return items
-    .map(i => i.replace(/^[-*\d.]+\s+/, '').trim())
-    .filter(i => i.length > 10)
-    .slice(0, 5);
+  return items.map(i => i.replace(/^[-*\d.]+\s+/, '').trim()).filter(i => i.length > 10).slice(0, 5);
 }
 
 export const analysisService = {
   async runTwoPassAnalysis(legalCase: Case): Promise<{
     pass1: string; pass2: string; final: string;
     confidence: number; needsMoreInfo: boolean; questions: string[];
+    ragDocsUsed: number;
   }> {
     if (!GEMINI_API_KEY) throw new Error('Gemini API key not configured');
     const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
 
+    let ragContext = '';
+    let ragDocsUsed = 0;
+    try {
+      const queryText = `${legalCase.title} ${legalCase.description ?? ''} ${legalCase.category}`;
+      ragContext = await getRagContextForCase(queryText, legalCase.category);
+      ragDocsUsed = (ragContext.match(/### \[/g) ?? []).length;
+      console.log(`[analysisService] RAG: ${ragDocsUsed} docs retrieved`);
+    } catch (ragErr) {
+      console.warn('[analysisService] RAG fetch failed (continuing without):', ragErr);
+    }
+
     const r1 = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
-      contents: [{ role: 'user', parts: [{ text: buildPass1Prompt(legalCase) }] }],
+      contents: [{ role: 'user', parts: [{ text: buildPass1Prompt(legalCase, ragContext) }] }],
     });
     const pass1 = r1.text ?? '';
 
@@ -134,20 +146,16 @@ export const analysisService = {
     });
     const final = r3.text ?? '';
 
-    const confidence = extractConfidenceScore(pass1);
-    const questions = extractQuestions(pass1);
+    const confidence    = extractConfidenceScore(pass1);
+    const questions     = extractQuestions(pass1);
     const needsMoreInfo = questions.length > 0 || confidence < 5;
 
-    return { pass1, pass2, final, confidence, needsMoreInfo, questions };
+    return { pass1, pass2, final, confidence, needsMoreInfo, questions, ragDocsUsed };
   },
 
   async createAnalysis(input: CreateAnalysisInput): Promise<CaseAnalysis> {
     if (!supabase) throw new Error('Supabase not configured');
-    const { data, error } = await supabase
-      .from('case_analyses')
-      .insert(input)
-      .select()
-      .single();
+    const { data, error } = await supabase.from('case_analyses').insert(input).select().single();
     if (error) throw error;
     return data as CaseAnalysis;
   },
@@ -155,8 +163,7 @@ export const analysisService = {
   async getAnalysesForAdmin(): Promise<(CaseAnalysis & { cases: { title: string; category: string; urgency: string; user_id: string } | null })[]> {
     if (!supabase) return [];
     const { data, error } = await supabase
-      .from('case_analyses')
-      .select('*, cases(title, category, urgency, user_id)')
+      .from('case_analyses').select('*, cases(title, category, urgency, user_id)')
       .order('created_at', { ascending: false });
     if (error) throw error;
     return (data ?? []) as any;
@@ -167,9 +174,7 @@ export const analysisService = {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return [];
     const { data, error } = await supabase
-      .from('case_analyses')
-      .select('*')
-      .eq('user_id', user.id)
+      .from('case_analyses').select('*').eq('user_id', user.id)
       .order('created_at', { ascending: false });
     if (error) return [];
     return (data ?? []) as CaseAnalysis[];
@@ -177,11 +182,7 @@ export const analysisService = {
 
   async getAnalysisById(id: string): Promise<CaseAnalysis | null> {
     if (!supabase) return null;
-    const { data, error } = await supabase
-      .from('case_analyses')
-      .select('*')
-      .eq('id', id)
-      .single();
+    const { data, error } = await supabase.from('case_analyses').select('*').eq('id', id).single();
     if (error) return null;
     return data as CaseAnalysis;
   },
@@ -189,12 +190,8 @@ export const analysisService = {
   async getAnalysisByCase(caseId: string): Promise<CaseAnalysis | null> {
     if (!supabase) return null;
     const { data, error } = await supabase
-      .from('case_analyses')
-      .select('*')
-      .eq('case_id', caseId)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .from('case_analyses').select('*').eq('case_id', caseId)
+      .order('created_at', { ascending: false }).limit(1).maybeSingle();
     if (error) return null;
     return data as CaseAnalysis | null;
   },
@@ -204,33 +201,22 @@ export const analysisService = {
     updates: Partial<Pick<CaseAnalysis, 'final_content' | 'admin_notes' | 'status' | 'sent_at'>>
   ): Promise<CaseAnalysis> {
     if (!supabase) throw new Error('Supabase not configured');
-    const { data, error } = await supabase
-      .from('case_analyses')
-      .update(updates)
-      .eq('id', id)
-      .select()
-      .single();
+    const { data, error } = await supabase.from('case_analyses').update(updates).eq('id', id).select().single();
     if (error) throw error;
     return data as CaseAnalysis;
   },
 
   async sendAnalysisToUser(analysisId: string, caseId: string, finalContent: string): Promise<void> {
     await messageService.addMessage(caseId, 'assistant', finalContent);
-    await this.updateAnalysis(analysisId, {
-      status: 'sent',
-      sent_at: new Date().toISOString(),
-    });
+    await this.updateAnalysis(analysisId, { status: 'sent', sent_at: new Date().toISOString() });
   },
 
   async sendQuestionsToUser(analysisId: string, caseId: string, questions: string[]): Promise<void> {
     const lines = [
-      '## Rueckfragen zu Ihrem Fall',
-      '',
-      'Unser Rechtsexperte benoetigt noch einige Informationen, um Ihren Fall vollstaendig einschaetzen zu koennen:',
-      '',
-      ...questions.map((q, i) => (i + 1) + '. ' + q),
-      '',
-      'Bitte beantworten Sie diese Fragen so ausfuehrlich wie moeglich. Ihre Antworten helfen uns, Ihnen eine praezisere Einschaetzung zu geben.',
+      '## Rueckfragen zu Ihrem Fall', '',
+      'Unser Rechtsexperte benoetigt noch einige Informationen:', '',
+      ...questions.map((q, i) => (i + 1) + '. ' + q), '',
+      'Bitte beantworten Sie diese Fragen so ausfuehrlich wie moeglich.',
     ];
     await messageService.addMessage(caseId, 'assistant', lines.join('\n'));
     await this.updateAnalysis(analysisId, { status: 'reviewed' });
@@ -242,15 +228,12 @@ export const analysisService = {
     if (!user) return;
     try {
       const result = await this.runTwoPassAnalysis(legalCase);
+      console.log(`[analysisService] Done. RAG docs: ${result.ragDocsUsed}`);
       await this.createAnalysis({
-        case_id: legalCase.id,
-        user_id: user.id,
-        pass1_raw: result.pass1,
-        pass2_review: result.pass2,
-        final_content: result.final,
-        confidence_score: result.confidence,
-        needs_more_info: result.needsMoreInfo,
-        questions_for_user: result.questions,
+        case_id: legalCase.id, user_id: user.id,
+        pass1_raw: result.pass1, pass2_review: result.pass2,
+        final_content: result.final, confidence_score: result.confidence,
+        needs_more_info: result.needsMoreInfo, questions_for_user: result.questions,
       });
     } catch (e) {
       console.error('Background analysis failed:', e);
