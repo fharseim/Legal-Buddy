@@ -1,20 +1,24 @@
 /**
  * POST /api/ingest-legal-docs
  *
- * Fetches German court decisions from Open Legal Data (openlegaldata.io),
- * embeds them with gemini-embedding-001 (v1beta, 768-dim via outputDimensionality),
- * and stores them in Supabase pgvector.
+ * Fetches German court decisions from Open Legal Data (de.openlegaldata.io),
+ * embeds them with Google gemini-embedding-001, and stores in Supabase pgvector.
  *
- * Body: { area?: string, count?: number, offset?: number }
+ * Body params:
+ *   area      – label for the legal_area column (default 'Allgemeines Recht')
+ *   count     – decisions to fetch per run (default 10)
+ *   offset    – numeric offset into the ID-ordered dataset (default 0)
+ *               Use multiples of 10 (0, 10, 20 … 352000) to get unique docs
+ *   secret    – INGESTION_SECRET env var for protection
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
 
-const SUPABASE_URL     = process.env.SUPABASE_URL     ?? process.env.VITE_SUPABASE_URL ?? '';
+const SUPABASE_URL     = process.env.SUPABASE_URL      ?? process.env.VITE_SUPABASE_URL ?? '';
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
-const GEMINI_API_KEY   = process.env.GEMINI_API_KEY   ?? process.env.VITE_GEMINI_API_KEY ?? '';
-const INGESTION_SECRET = process.env.INGESTION_SECRET ?? '';
+const GEMINI_API_KEY   = process.env.GEMINI_API_KEY    ?? process.env.VITE_GEMINI_API_KEY ?? '';
+const INGESTION_SECRET = process.env.INGESTION_SECRET  ?? '';
 
 const OLDP_BASE   = 'https://de.openlegaldata.io/api';
 const EMBED_MODEL = 'gemini-embedding-001';
@@ -26,77 +30,49 @@ interface OldpCase {
   slug: string;
   file_number: string;
   date: string;
-  content: string;
-  source_url: string | null;
-  court: { id: number; name: string; code: string; jurisdiction: string; level: string; };
-  tags: string[];
+  court: { name: string } | string;
+  content?: string;
+  abstract?: string;
+  source_url?: string;
 }
-
-interface OldpResponse {
-  count: number;
-  next: string | null;
-  results: OldpCase[];
-}
+interface OldpResponse { count: number; results: OldpCase[]; }
 
 function cleanText(raw: string): string {
   return raw
-    .replace(/<[^>]*>/g, ' ')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, MAX_CONTENT);
+    .replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"')
+    .replace(/\s+/g, ' ').trim().slice(0, MAX_CONTENT);
 }
 
-function mapLegalArea(tags: string[]): string {
-  if (!tags?.length) return 'Allgemeines Recht';
-  const t = tags.join(' ').toLowerCase();
-  if (t.includes('miet'))         return 'Mietrecht';
-  if (t.includes('arbeit'))       return 'Arbeitsrecht';
-  if (t.includes('verbraucher'))  return 'Verbraucherrecht';
-  if (t.includes('vertrags'))     return 'Vertragsrecht';
-  if (t.includes('familien'))     return 'Familienrecht';
-  if (t.includes('erb'))          return 'Erbrecht';
-  if (t.includes('handels'))      return 'Handelsrecht';
-  if (t.includes('straf'))        return 'Strafrecht';
-  if (t.includes('verwaltung'))   return 'Verwaltungsrecht';
-  if (t.includes('steuer'))       return 'Steuerrecht';
-  if (t.includes('gesellschaft')) return 'Gesellschaftsrecht';
-  return tags[0] ?? 'Allgemeines Recht';
+function courtName(c: OldpCase['court']): string {
+  if (!c) return 'Unbekannt';
+  return typeof c === 'string' ? c : c.name ?? 'Unbekannt';
 }
 
-/** Embed using gemini-embedding-001 via v1beta, truncated to 768 dims */
-async function embedText(apiKey: string, text: string): Promise<number[]> {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${EMBED_MODEL}:embedContent?key=${apiKey}`;
+async function embedText(text: string): Promise<number[]> {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${EMBED_MODEL}:embedContent?key=${GEMINI_API_KEY}`;
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      content: { parts: [{ text }] },
-      outputDimensionality: EMBED_DIMS,
-    }),
+    body: JSON.stringify({ content: { parts: [{ text }] }, outputDimensionality: EMBED_DIMS }),
   });
-  if (!res.ok) {
-    const errText = await res.text();
-    throw new Error(`Embed API ${res.status}: ${errText.slice(0, 300)}`);
-  }
+  if (!res.ok) { const e = await res.text(); throw new Error(`Embed ${res.status}: ${e.slice(0,200)}`); }
   const data = await res.json();
   const values: number[] = data?.embedding?.values ?? [];
-  if (!values.length) throw new Error('Empty embedding returned');
+  if (!values.length) throw new Error('Empty embedding');
   return values;
 }
 
-async function fetchCases(search: string, limit: number, offset: number): Promise<OldpResponse> {
-  const params = new URLSearchParams({
-    search, limit: String(limit), offset: String(offset), format: 'json',
-  });
+/**
+ * KEY FIX: ordering=id ensures each offset window returns genuinely different docs.
+ * Previous search-based approach always returned the same 10 most-recent cases.
+ */
+async function fetchCases(offset: number, limit: number): Promise<OldpResponse> {
+  const params = new URLSearchParams({ ordering: 'id', limit: String(limit), offset: String(offset), format: 'json' });
   const res = await fetch(`${OLDP_BASE}/cases/?${params}`, {
     headers: { Accept: 'application/json', 'User-Agent': 'LegalBuddy/1.0' },
   });
-  if (!res.ok) throw new Error(`OLDP API ${res.status}: ${res.statusText}`);
+  if (!res.ok) throw new Error(`OLDP ${res.status}: ${res.statusText}`);
   return res.json();
 }
 
@@ -104,69 +80,58 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const secret = req.headers['x-ingestion-secret'] ?? req.body?.secret;
-  if (INGESTION_SECRET && secret !== INGESTION_SECRET)
-    return res.status(401).json({ error: 'Unauthorized' });
-
+  if (INGESTION_SECRET && secret !== INGESTION_SECRET) return res.status(401).json({ error: 'Unauthorized' });
   if (!SERVICE_ROLE_KEY) return res.status(500).json({ error: 'SUPABASE_SERVICE_ROLE_KEY not set' });
   if (!GEMINI_API_KEY)   return res.status(500).json({ error: 'GEMINI_API_KEY not set' });
 
-  const area   = (req.body?.area ?? '') as string;
-  const count  = Math.min(Number(req.body?.count  ?? 50), 200);
+  const area   = (req.body?.area   ?? 'Allgemeines Recht') as string;
+  const count  = Math.min(Number(req.body?.count  ?? 10), 50);
   const offset = Number(req.body?.offset ?? 0);
 
   const sb = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
-  const searchQuery = area ? `${area} Urteil` : 'Urteil Schadensersatz Vertrag Kuendigung';
-
-  let inserted = 0;
-  let skipped  = 0;
+  let fetched = 0, inserted = 0, skipped = 0;
   const errors: string[] = [];
 
   try {
-    const page = await fetchCases(searchQuery, count, offset);
+    const page = await fetchCases(offset, count);
+    fetched = page.results?.length ?? 0;
 
     for (const doc of page.results ?? []) {
       try {
-        const raw = doc.content ?? '';
+        const raw = doc.content ?? doc.abstract ?? '';
         if (!raw.trim()) { skipped++; continue; }
 
-        const content   = cleanText(raw);
-        const courtName = doc.court?.name ?? 'Unbekanntes Gericht';
-        const legalArea = mapLegalArea(doc.tags ?? []);
-        const docUrl    = doc.source_url ?? `https://de.openlegaldata.io/case/${doc.slug}/`;
+        const content = cleanText(raw);
+        const court   = courtName(doc.court);
+        const docUrl  = doc.source_url ?? `${OLDP_BASE}/cases/${doc.slug}/`;
+        const toEmbed = `${court} ${doc.date ?? ''}\nAktenzeichen: ${doc.file_number ?? ''}\nRechtsgebiet: ${area}\n\n${content}`;
 
-        const textToEmbed = `${courtName} ${doc.date} ${doc.file_number}\nRechtsgebiet: ${legalArea}\n${content}`;
-        const embedding   = await embedText(GEMINI_API_KEY, textToEmbed);
+        const embedding = await embedText(toEmbed);
 
-        const { error } = await sb.from('legal_documents').upsert({
-          doc_type:      'court_decision',
-          source:        'openlegaldata',
-          title:         `${courtName} ${doc.date} – ${doc.file_number}`,
-          content,
-          court:         courtName,
-          decision_date: doc.date || null,
-          file_number:   doc.file_number || null,
-          legal_area:    legalArea,
-          url:           docUrl,
-          embedding:     `[${embedding.join(',')}]`,
-        }, { onConflict: 'url' });
+        const { error } = await sb.from('legal_documents').upsert(
+          {
+            doc_type:      'court_decision',
+            source:        'openlegaldata',
+            title:         `${court} – ${doc.file_number ?? doc.slug}`,
+            content,
+            court,
+            decision_date: doc.date || null,
+            file_number:   doc.file_number || null,
+            legal_area:    area,
+            url:           docUrl,
+            embedding:     `[${embedding.join(',')}]`,
+          },
+          { onConflict: 'url' }
+        );
 
-        if (error) errors.push(`Doc ${doc.id}: ${error.message}`);
+        if (error) { errors.push(`Doc ${doc.id}: ${error.message}`); skipped++; }
         else inserted++;
 
         await new Promise(r => setTimeout(r, 150));
-      } catch (docErr) {
-        errors.push(`Doc ${doc.id}: ${String(docErr)}`);
-        skipped++;
-      }
+      } catch (e) { errors.push(`Doc ${doc.id ?? '?'}: ${e}`); skipped++; }
     }
 
-    return res.status(200).json({
-      ok: true, area: area || 'all',
-      fetched: page.results?.length ?? 0,
-      total_available: page.count,
-      inserted, skipped,
-      errors: errors.slice(0, 10),
-    });
+    return res.status(200).json({ ok: true, area, offset, total_available: page.count, fetched, inserted, skipped, errors: errors.slice(0, 10) });
   } catch (err) {
     console.error('[ingest-legal-docs]', err);
     return res.status(500).json({ error: String(err) });
