@@ -2,8 +2,8 @@
  * POST /api/ingest-legal-docs
  *
  * Fetches German court decisions from Open Legal Data (openlegaldata.io),
- * embeds them with Google embedding-001 (v1 REST API, 768-dim), and stores
- * them in Supabase pgvector.
+ * embeds them with gemini-embedding-001 (v1beta, 768-dim via outputDimensionality),
+ * and stores them in Supabase pgvector.
  *
  * Body: { area?: string, count?: number, offset?: number }
  */
@@ -17,7 +17,8 @@ const GEMINI_API_KEY   = process.env.GEMINI_API_KEY   ?? process.env.VITE_GEMINI
 const INGESTION_SECRET = process.env.INGESTION_SECRET ?? '';
 
 const OLDP_BASE   = 'https://de.openlegaldata.io/api';
-const EMBED_MODEL = 'embedding-001';   // stable 768-dim embedding model
+const EMBED_MODEL = 'gemini-embedding-001';
+const EMBED_DIMS  = 768;
 const MAX_CONTENT = 1800;
 
 interface OldpCase {
@@ -67,13 +68,15 @@ function mapLegalArea(tags: string[]): string {
   return tags[0] ?? 'Allgemeines Recht';
 }
 
+/** Embed using gemini-embedding-001 via v1beta, truncated to 768 dims */
 async function embedText(apiKey: string, text: string): Promise<number[]> {
-  const url = `https://generativelanguage.googleapis.com/v1/models/${EMBED_MODEL}:embedContent?key=${apiKey}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${EMBED_MODEL}:embedContent?key=${apiKey}`;
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       content: { parts: [{ text }] },
+      outputDimensionality: EMBED_DIMS,
     }),
   });
   if (!res.ok) {
