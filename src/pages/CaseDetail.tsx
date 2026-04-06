@@ -37,16 +37,66 @@ function buildSystemPrompt(legalCase: Case): string {
     + 'Stil: Klar, empatisch, verstaendlich. Immer mit dem Hinweis: "Dies ist keine Rechtsberatung."';
 }
 
+function renderLine(line: string, i: number) {
+  if (line.startsWith('## ')) return <h3 key={i} className="font-bold text-slate-900 text-base mt-4 mb-1">{line.slice(3)}</h3>;
+  if (line.startsWith('# ')) return <h2 key={i} className="font-bold text-slate-900 text-lg mt-4 mb-1">{line.slice(2)}</h2>;
+  if (line.startsWith('**') && line.endsWith('**')) return <p key={i} className="font-semibold text-slate-800 mt-2">{line.slice(2, -2)}</p>;
+  if (line.startsWith('- ') || line.startsWith('\u2022 ')) return <li key={i} className="ml-4 text-slate-700 list-disc">{line.slice(2)}</li>;
+  if (line.match(/^\d+\. /)) return <li key={i} className="ml-4 text-slate-700 list-decimal">{line.replace(/^\d+\.\s/, '')}</li>;
+  if (line.trim() === '') return <br key={i} />;
+  if (line.startsWith('_') && line.endsWith('_')) return <p key={i} className="text-xs text-slate-400 italic mt-4 pt-3 border-t border-slate-100">{line.slice(1, -1)}</p>;
+  return <p key={i} className="text-slate-700 leading-relaxed">{line}</p>;
+}
+
 function formatMessage(text: string) {
-  const lines = text.split('\n');
-  return lines.map((line, i) => {
-    if (line.startsWith('## ')) return <h3 key={i} className="font-bold text-slate-900 text-base mt-3 mb-1">{line.slice(3)}</h3>;
-    if (line.startsWith('# ')) return <h2 key={i} className="font-bold text-slate-900 text-lg mt-3 mb-1">{line.slice(2)}</h2>;
-    if (line.startsWith('**') && line.endsWith('**')) return <p key={i} className="font-semibold text-slate-800 mt-2">{line.slice(2, -2)}</p>;
-    if (line.startsWith('- ') || line.startsWith('\u2022 ')) return <li key={i} className="ml-4 text-slate-700 list-disc">{line.slice(2)}</li>;
-    if (line.match(/^\d+\. /)) return <li key={i} className="ml-4 text-slate-700 list-decimal">{line.replace(/^\d+\.\s/, '')}</li>;
-    if (line.trim() === '') return <br key={i} />;
-    return <p key={i} className="text-slate-700 leading-relaxed">{line}</p>;
+  // Split into named sections to detect "Musterschreiben"
+  const LETTER_HEADER = /musterschreiben|schreiben an die/i;
+  const sections: Array<{ header: string | null; lines: string[] }> = [];
+  let current: { header: string | null; lines: string[] } = { header: null, lines: [] };
+
+  for (const line of text.split('\n')) {
+    if (line.startsWith('## ')) {
+      if (current.lines.length > 0 || current.header !== null) sections.push(current);
+      current = { header: line.slice(3).trim(), lines: [] };
+    } else {
+      current.lines.push(line);
+    }
+  }
+  if (current.lines.length > 0 || current.header !== null) sections.push(current);
+
+  return sections.map((section, si) => {
+    const isLetter = section.header && LETTER_HEADER.test(section.header);
+    const headerEl = section.header
+      ? <h3 key={'h' + si} className="font-bold text-slate-900 text-base mt-4 mb-1">{section.header}</h3>
+      : null;
+
+    if (isLetter) {
+      // Render the letter section as a document-style card
+      const letterLines = section.lines;
+      return (
+        <div key={si}>
+          <div className="flex items-center gap-2 mt-5 mb-2">
+            <div className="w-5 h-5 bg-blue-600 rounded flex items-center justify-center flex-shrink-0">
+              <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+            </div>
+            <h3 className="font-bold text-blue-800 text-base">{section.header}</h3>
+          </div>
+          <div className="bg-white border border-slate-200 rounded-xl px-5 py-4 shadow-sm font-mono text-sm text-slate-800 leading-relaxed whitespace-pre-wrap">
+            {letterLines.join('\n').trim()}
+          </div>
+          <p className="text-xs text-slate-400 mt-2 ml-1">Ersetzen Sie alle Angaben in [eckigen Klammern] mit Ihren persönlichen Daten.</p>
+        </div>
+      );
+    }
+
+    return (
+      <div key={si}>
+        {headerEl}
+        {section.lines.map((line, li) => renderLine(line, li))}
+      </div>
+    );
   });
 }
 
@@ -61,7 +111,7 @@ function QuestionsCard({ content, time }: { content: string; time: string }) {
         <div className="w-5 h-5 bg-amber-500 rounded flex items-center justify-center">
           <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
+          </svg>3E
         </div>
         <span className="text-xs font-semibold text-amber-700">Rueckfragen vom Rechtsexperten</span>
       </div>
@@ -122,7 +172,7 @@ export default function CaseDetail() {
   useEffect(() => { loadData(); }, [loadData]);
 
   const sendMessage = async () => {
-    if (!input.trim() || sending || !legalCase || !id) return;
+    if (!input.trim()%20|| sending || !legalCase || !id) return;
     const userText = input.trim();
     setInput('');
     setSending(true);
@@ -352,7 +402,7 @@ export default function CaseDetail() {
 
         {/* Sidebar */}
         <AnimatePresence>
-          {showSidebar && (
+          {showSidebar &%26 (
             <motion.aside
               initial={{ width: 0, opacity: 0 }}
               animate={{ width: 280, opacity: 1 }}
