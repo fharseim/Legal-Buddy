@@ -70,14 +70,14 @@ const Hero = () => (
       >
         <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-white/5 text-blue-400 rounded-full text-xs font-semibold mb-8 border border-white/10">
           <Sparkles className="w-3.5 h-3.5" />
-          AI-gestützt &amp; anwaltlich geprøft
+          AI-gestützt &amp; anwaltlich geprüft
         </div>
         <h1 className="text-5xl md:text-7xl font-bold leading-[1.06] tracking-tight mb-6">
           <span className="bg-gradient-to-r from-blue-400 via-violet-400 to-blue-300 bg-clip-text text-transparent">
             Dein Recht.
           </span>
           <br />
-          <span classNa-e="text-white/30">Verständlich.</span>
+          <span className="text-slate-400">Verständlich.</span>
           <br />
           <span className="text-white">Sofort.</span>
         </h1>
@@ -117,40 +117,87 @@ const Hero = () => (
         transition={{ duration: 0.7, delay: 0.15 }}
         className="relative"
       >
-        <div className="aspect-square rounded-3xl overflow-hidden border border-white/10 relative bg-slate-900">
-          <img
-            src="https://images.unsplash.com/photo-1589829545856-d10d557cf95f?auto=format&fit=crop&q=80&w=1000"
-            alt="Legal Buddy"
-            className="w-full h-full object-cover opacity-60"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-[#05050a] via-transparent to-transparent" />
+        <div className="aspect-square rounded-3xl border border-white/10 relative bg-gradient-to-br from-slate-900 to-[#05050a] overflow-hidden">
+          {/* Inner glow orbs */}
+          <div className="absolute top-0 right-0 w-64 h-64 bg-blue-600/15 rounded-full blur-[80px] pointer-events-none" />
+          <div className="absolute bottom-0 left-0 w-48 h-48 bg-violet-600/10 rounded-full blur-[60px] pointer-events-none" />
 
+          {/* App UI Mockup */}
+          <div className="absolute inset-0 p-6 flex flex-col gap-3">
+            {/* Header */}
+            <div className="flex items-center gap-3 mb-1 pb-3 border-b border-white/8">
+              <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-violet-600 rounded-lg flex items-center justify-center shadow-lg shadow-blue-500/20">
+                <Scale className="text-white w-4 h-4" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-xs font-semibold text-white truncate">Mieterhöhung analysieren</div>
+                <div className="text-[10px] text-slate-500">Fall #2847 · Aktiv</div>
+              </div>
+              <div className="px-2 py-0.5 bg-emerald-500/15 text-emerald-400 text-[10px] font-semibold rounded-full border border-emerald-500/20 flex-shrink-0">
+                Live
+              </div>
+            </div>
+
+            {/* Chat messages */}
+            <div className="flex flex-col gap-2.5 flex-grow overflow-hidden">
+              <div className="self-end max-w-[82%] bg-blue-600/20 border border-blue-500/20 rounded-2xl rounded-tr-sm px-3 py-2">
+                <p className="text-[11px] text-slate-200 leading-relaxed">Vermieter will Miete um 15% erhöhen. Was kann ich tun?</p>
+              </div>
+              <div className="self-start max-w-[88%] bg-white/5 border border-white/8 rounded-2xl rounded-tl-sm px-3 py-2">
+                <p className="text-[11px] text-slate-300 leading-relaxed">Ich analysiere Ihren Fall. Eine Erhöhung von 15% ist an klare Voraussetzungen geknüpft...</p>
+              </div>
+
+              {/* Analysis card */}
+              <div className="bg-white/5 border border-white/10 rounded-xl p-3 mt-0.5">
+                <div className="flex items-center gap-2 mb-2.5">
+                  <FileCheck className="text-blue-400 w-3.5 h-3.5 flex-shrink-0" />
+                  <span className="text-[11px] font-semibold text-white">Rechtliche Einschätzung</span>
+                  <div className="ml-auto text-[10px] font-bold text-emerald-400">85% Chance</div>
+                </div>
+                <div className="space-y-1.5">
+                  {[
+                    { color: 'bg-emerald-400', text: 'Widerspruchsfrist: 2 Monate' },
+                    { color: 'bg-blue-400',    text: 'Vergleichsmiete prüfbar' },
+                    { color: 'bg-violet-400',  text: 'Musterbrief verfügbar' },
+                  ].map((item) => (
+                    <div key={item.text} className="flex items-center gap-2">
+                      <div className={`w-1.5 h-1.5 ${item.color} rounded-full flex-shrink-0`} />
+                      <span className="text-[10px] text-slate-400">{item.text}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Input bar */}
+            <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-xl px-3 py-2 mt-auto">
+              <div className="flex gap-1">
+                <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" />
+                <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0.15s' }} />
+                <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0.3s' }} />
+              </div>
+              <span className="text-[10px] text-slate-500 flex-1">Legal Buddy analysiert...</span>
+              <div className="w-6 h-6 bg-gradient-to-r from-blue-600 to-violet-600 rounded-lg flex items-center justify-center flex-shrink-0">
+                <ArrowRight className="text-white w-3 h-3" />
+              </div>
+            </div>
+          </div>
+
+          {/* Floating badge */}
           <motion.div
-            animate={{ y: [0, -8, 0] }}
+            animate={{ y: [0, -6, 0] }}
             transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
-            className="absolute top-8 -left-4 bg-white/8 backdrop-blur-xl p-4 rounded-2xl border border-white/15 max-w-[190px]"
+            className="absolute -top-3 -right-3 bg-white/8 backdrop-blur-xl px-3 py-2 rounded-2xl border border-white/15"
           >
-            <div className="flex items-center gap-2.5 mb-1.5">
-              <div className="w-7 h-7 bg-emerald-500/20 rounded-lg flex items-center justify-center">
-                <Check className="text-emerald-400 w-4 h-4" />
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-6 bg-emerald-500/20 rounded-lg flex items-center justify-center">
+                <Check className="text-emerald-400 w-3.5 h-3.5" />
               </div>
-              <span className="text-xs font-semibold text-white">Analyse fertig</span>
-            </div>
-            <p className="text-[10px] text-slate-400 leading-relaxed">Rückerstattungschance: 85 %</p>
-          </motion.div>
-
-          <motion.div
-            animate={{ y: [0, 8, 0] }}
-            transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut', delay: 1 }}
-            className="absolute bottom-8 -right-4 bg-white/8 backdrop-blur-xl p-4 rounded-2xl border border-white/15 max-w-[210px]"
-          >
-            <div className="flex items-center gap-2.5 mb-1.5">
-              <div className="w-7 h-7 bg-blue-500/20 rounded-lg flex items-center justify-center">
-                <FileCheck className="text-blue-400 w-4 h-4" />
+              <div>
+                <div className="text-[10px] font-semibold text-white">Musterbrief fertig</div>
+                <div className="text-[9px] text-slate-500">Zum Versenden bereit</div>
               </div>
-              <span className="text-xs font-semibold text-white">Dokument erstellt</span>
             </div>
-            <p className="text-[10px] text-slate-400 leading-relaxed">Widerrufsschreiben ist bereit.</p>
           </motion.div>
         </div>
       </motion.div>
@@ -206,7 +253,7 @@ const Rechtsgebiete = () => (
         {[
           { title: 'Verbraucherrecht', desc: 'Abo-Falle? Mangelhaftes Produkt? Wir helfen dir, dein Geld zurückzubekommen.', tags: ['Widerruf', 'Gewährleistung', 'Online-Kauf'], active: true },
           { title: 'Vertragscheck', desc: 'Bevor du unterschreibst – lass Legal Buddy deinen Vertrag prüfen.', tags: ['Mietvertrag', 'Arbeitsvertrag', 'AGB-Check'], active: true },
-          { title: 'Mietrecht', desc: 'Nebenkostenabrechnung, Mieterhöhung, Kündigung – bald verfügbar.', tags: ['Nebenkosten', 'Mieterhöhung', 'Kündigung'], active: false },
+          { title: 'Mietrecht', desc: 'Nebenkostenabrechnung, Mieterhöhung, Køndigung – bald verfügbar.', tags: ['Nebenkosten', 'Mieterhöhung', 'Kündigung'], active: false },
           { title: 'Arbeitsrecht', desc: 'Køndigung erhalten? Abfindung verhandeln? Bald bei Legal Buddy.', tags: ['Køndigung', 'Abfindung', 'Zeugnis'], active: false },
         ].map((area, i) => (
           <motion.div
@@ -313,7 +360,7 @@ const FAQ = () => {
   const [openIndex, setOpenIndex] = useState<number | null>(0);
   const faqs = [
     { q: 'Ist Legal Buddy ein Anwalt?', a: 'Legal Buddy wird von einer zugelassenen Rechtsanwaltskanzlei betrieben. Die AI-gestützte Ersteinschätzung wird anwaltlich verantwortet. Bei Bedarf vermitteln wir dich an spezialisierte Anwälte.' },
-    { q: 'Wie genau ist die AI-Analyse?', a: 'Unsere AI wird kontinuierlich an aktueller Rechtsprechung trainiert und von Anwälten øberwacht. Jede Analyse enthält einen Confidence-Score. Bei Unsicherheit empfehlen wir eine anwaltliche Prøfung.' },
+    { q: 'Wie genau ist die AI-Analyse?', a: 'Unsere AI wird kontinuierlich an aktueller Rechtsprechung trainiert und von Anwälten überwacht. Jede Analyse enthält einen Confidence-Score. Bei Unsicherheit empfehlen wir eine anwaltliche Prøfung.' },
     { q: 'Kann ich Legal Buddy jederzeit køndigen?', a: 'Ja, monatlich kündbar. Keine Mindestlaufzeit. Keine versteckten Kosten.' },
   ];
   return (
