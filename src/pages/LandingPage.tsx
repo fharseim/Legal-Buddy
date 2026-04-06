@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { Shield, Scale, FileCheck, MessageSquare, ChevronDown, Check, ArrowRight, Menu, X, Sparkles } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { PricingABTest } from '../components/pricing/PricingABTest';
 
 const Nav = () => {
   const [isScrolled, setIsScrolled] = useState(false);
@@ -361,204 +362,6 @@ const Rechtsgebiete = () => {
   );
 };
 
-const Pricing = () => {
-  const comparisonRows = [
-    { label: 'Kosten pro Anliegen', legal: 'ab 29 €', anwalt: '190–600 €', win: 'legal' },
-    { label: 'Verfügbarkeit', legal: '24/7, sofort', anwalt: 'Mo–Fr, Bürozeiten', win: 'legal' },
-    { label: 'Wartezeit auf Antwort', legal: '< 2 Minuten', anwalt: '1–4 Wochen', win: 'legal' },
-    { label: 'Dokumentvorlagen', legal: 'Inklusive', anwalt: 'Extra berechnet', win: 'legal' },
-    { label: 'Musterbrief / Schreiben', legal: 'Automatisch erstellt', anwalt: 'Auf Anfrage, kostenpflichtig', win: 'legal' },
-    { label: 'Komplexe Verfahren', legal: 'Anwaltsvermittlung', anwalt: 'Vollständige Vertretung', win: 'anwalt' },
-  ];
-
-  const packages = [
-    {
-      count: 1, label: 'Einzel-Fall', price: '29', pricePerCase: '29,00',
-      validity: '6 Monate gültig', saving: null, popular: false,
-      features: ['KI-Ersteinschätzung', 'Musterbrief inklusive', 'Schritt-für-Schritt-Plan', 'Anwaltlich geprüft'],
-    },
-    {
-      count: 3, label: '3er-Paket', price: '69', pricePerCase: '23,00',
-      validity: '12 Monate gültig', saving: '18 € gespart', popular: true,
-      features: ['Alles aus Einzel-Fall', 'Vertragscheck (bis 5 S.)', 'Priorität in der Queue', '12 Monate gültig'],
-    },
-    {
-      count: 10, label: '10er-Paket', price: '199', pricePerCase: '19,90',
-      validity: '24 Monate gültig', saving: '91 € gespart', popular: false,
-      features: ['Alles aus 3er-Paket', 'Vertragscheck (bis 20 S.)', 'Prioritäts-Support', '24 Monate gültig'],
-    },
-  ];
-
-  return (
-    <section id="pricing" className="py-24 px-6 bg-[#05050a] border-t border-white/5 relative overflow-hidden">
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[600px] bg-violet-600/8 rounded-full blur-[130px] pointer-events-none" />
-      <div className="max-w-6xl mx-auto relative">
-
-        {/* Header */}
-        <div className="max-w-2xl mb-16">
-          <p className="text-xs font-semibold text-blue-400 tracking-widest uppercase mb-3">Preise</p>
-          <h2 className="text-3xl md:text-4xl font-bold text-white tracking-tight mb-4">
-            Recht bekommen — ohne Anwaltsrechnung
-          </h2>
-          <p className="text-slate-400 leading-relaxed">
-            Bezahle nur für das, was du wirklich brauchst. Kein Abo, keine Mindestlaufzeit, keine versteckten Kosten.
-          </p>
-        </div>
-
-        {/* Visual price comparison */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          className="grid md:grid-cols-2 gap-4 mb-5"
-        >
-          <div className="p-8 rounded-2xl border border-white/8 bg-white/[0.03] relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-40 h-40 bg-red-500/5 rounded-full blur-[50px]" />
-            <p className="text-xs font-semibold text-slate-600 uppercase tracking-widest mb-6">Herkömmliche Rechtsberatung</p>
-            <div className="mb-6">
-              <span className="text-5xl font-bold text-white/25">190–600 €</span>
-              <p className="text-slate-600 text-sm mt-2">pro Erstberatung beim Anwalt</p>
-            </div>
-            <div className="space-y-3">
-              {['Wartezeit bis zu 4 Wochen', 'Nur während Bürozeiten erreichbar', 'Musterbrief extra berechnet'].map(t => (
-                <div key={t} className="flex items-center gap-2.5 text-sm text-slate-600">
-                  <X className="w-3.5 h-3.5 flex-shrink-0" />
-                  {t}
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="p-8 rounded-2xl border border-blue-500/20 bg-gradient-to-br from-blue-600/10 to-violet-600/5 relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-48 h-48 bg-blue-500/10 rounded-full blur-[70px]" />
-            <p className="text-xs font-semibold text-blue-400 uppercase tracking-widest mb-6">Legal Buddy</p>
-            <div className="mb-6">
-              <span className="text-5xl font-bold text-white">ab 29 €</span>
-              <p className="text-slate-400 text-sm mt-2">pro Fall — alles inklusive</p>
-            </div>
-            <div className="space-y-3">
-              {['Sofortige Antwort, 24/7 verfügbar', 'Musterbrief automatisch erstellt', 'Anwaltlich geprüft & verantwortet'].map(t => (
-                <div key={t} className="flex items-center gap-2.5 text-sm text-slate-300">
-                  <Check className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />
-                  {t}
-                </div>
-              ))}
-            </div>
-          </div>
-        </motion.div>
-
-        {/* Equivalence hint */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          whileInView={{ opacity: 1 }}
-          viewport={{ once: true }}
-          className="flex justify-center mb-10"
-        >
-          <div className="inline-flex items-center gap-2.5 px-5 py-2.5 rounded-full bg-white/5 border border-white/8 text-sm text-slate-400">
-            <Sparkles className="w-4 h-4 text-blue-400 flex-shrink-0" />
-            <span>Für den Preis einer Anwalts-Erstberatung bekommst du bis zu <strong className="text-white">20 Fälle</strong> bei Legal Buddy</span>
-          </div>
-        </motion.div>
-
-        {/* Comparison table */}
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          className="rounded-2xl border border-white/8 bg-white/[0.02] overflow-hidden mb-16"
-        >
-          <div className="grid grid-cols-3 bg-white/[0.03] border-b border-white/8">
-            <div className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-widest">Kriterium</div>
-            <div className="px-6 py-4 text-xs font-semibold text-blue-400 uppercase tracking-widest border-l border-white/8 flex items-center gap-2">
-              <Scale className="w-3.5 h-3.5" /> Legal Buddy
-            </div>
-            <div className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-widest border-l border-white/8">
-              Anwaltskanzlei
-            </div>
-          </div>
-          {comparisonRows.map((row, i) => (
-            <div key={i} className={cn('grid grid-cols-3', i < comparisonRows.length - 1 && 'border-b border-white/5')}>
-              <div className="px-6 py-4 text-sm text-slate-400">{row.label}</div>
-              <div className={cn('px-6 py-4 text-sm font-medium border-l border-white/8 flex items-center gap-1.5', row.win === 'legal' ? 'text-blue-400' : 'text-slate-500')}>
-                {row.win === 'legal' && <Check className="w-3.5 h-3.5 flex-shrink-0" />}
-                {row.legal}
-              </div>
-              <div className={cn('px-6 py-4 text-sm border-l border-white/8', row.win === 'anwalt' ? 'text-slate-300' : 'text-slate-600')}>
-                {row.anwalt}
-              </div>
-            </div>
-          ))}
-        </motion.div>
-
-        {/* Packages header */}
-        <div className="mb-8">
-          <h3 className="text-xl font-bold text-white mb-1.5">Wähle dein Paket</h3>
-          <p className="text-sm text-slate-500">Fälle kaufen, wann du sie brauchst. Keine monatliche Abrechnung.</p>
-        </div>
-
-        {/* Package cards */}
-        <div className="grid md:grid-cols-3 gap-4">
-          {packages.map((pkg, i) => (
-            <motion.div
-              key={i}
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: i * 0.1 }}
-              className={cn(
-                'p-8 rounded-2xl border flex flex-col relative',
-                pkg.popular
-                  ? 'bg-gradient-to-b from-blue-600/20 to-violet-600/10 border-blue-500/30 shadow-xl shadow-blue-500/10'
-                  : 'bg-white/5 border-white/8'
-              )}
-            >
-              {pkg.popular && (
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                  <span className="bg-gradient-to-r from-blue-600 to-violet-600 text-white text-[10px] font-semibold uppercase tracking-widest px-4 py-1.5 rounded-full shadow-lg">
-                    Beliebteste Wahl
-                  </span>
-                </div>
-              )}
-              {pkg.saving && (
-                <span className="absolute top-6 right-6 px-2.5 py-1 bg-emerald-500/15 text-emerald-400 text-[11px] font-semibold rounded-full border border-emerald-500/20">
-                  {pkg.saving}
-                </span>
-              )}
-              <p className="text-sm font-semibold text-slate-400 mb-1">{pkg.label}</p>
-              <div className="flex items-baseline gap-1 mb-1">
-                <span className="text-4xl font-bold text-white">{pkg.price} €</span>
-              </div>
-              <p className="text-xs text-slate-500 mb-8">{pkg.pricePerCase} € pro Fall · {pkg.validity}</p>
-              <ul className="space-y-3 mb-8 flex-grow">
-                {pkg.features.map(f => (
-                  <li key={f} className="flex items-center gap-3 text-sm">
-                    <Check className={cn('w-4 h-4 flex-shrink-0', pkg.popular ? 'text-blue-400' : 'text-slate-500')} />
-                    <span className="text-slate-300">{f}</span>
-                  </li>
-                ))}
-              </ul>
-              <Link
-                to="/register"
-                className={cn(
-                  'w-full py-3 rounded-full font-semibold text-center text-sm transition-all',
-                  pkg.popular
-                    ? 'bg-gradient-to-r from-blue-600 to-violet-600 text-white hover:opacity-90 shadow-lg shadow-blue-500/20'
-                    : 'bg-white/8 text-white hover:bg-white/12 border border-white/10'
-                )}
-              >
-                {pkg.count === 1 ? 'Jetzt loslegen' : `${pkg.count} Fälle kaufen`}
-              </Link>
-            </motion.div>
-          ))}
-        </div>
-
-        <p className="mt-8 text-center text-xs text-slate-600">
-          Alle Preise inkl. MwSt. · Sichere Zahlung via Stripe · Fälle verfallen nicht vor Ablauf der Gültigkeitsdauer
-        </p>
-      </div>
-    </section>
-  );
-};
 
 const FAQ = () => {
   const [openIndex, setOpenIndex] = useState<number | null>(0);
@@ -675,7 +478,7 @@ export default function LandingPage() {
       <Hero />
       <Features />
       <Rechtsgebiete />
-      <Pricing />
+      <PricingABTest />
       <FAQ />
       <CTA />
       <Footer />
