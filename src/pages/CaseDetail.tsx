@@ -402,7 +402,7 @@ export default function CaseDetail() {
 
         {/* Sidebar */}
         <AnimatePresence>
-          {showSidebar &%26 (
+          {showSidebar && (
             <motion.aside
               initial={{ width: 0, opacity: 0 }}
               animate={{ width: 280, opacity: 1 }}
