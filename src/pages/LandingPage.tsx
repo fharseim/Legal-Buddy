@@ -242,53 +242,124 @@ const Features = () => (
   </section>
 );
 
-const Rechtsgebiete = () => (
-  <section id="rechtsgebiete" className="py-24 px-6 bg-[#080810] border-t border-white/5">
-    <div className="max-w-6xl mx-auto">
-      <div className="max-w-xl mb-14">
-        <p className="text-xs font-semibold text-violet-400 tracking-widest uppercase mb-3">Rechtsgebiete</p>
-        <h2 className="text-3xl md:text-4xl font-bold text-white tracking-tight">Wobei können wir helfen?</h2>
+const Rechtsgebiete = () => {
+  const areas = [
+    {
+      icon: Scale,
+      title: 'Verbraucherrecht',
+      desc: 'Abo-Falle, mangelhaftes Produkt oder unlautere AGB? Wir helfen dir, dein Geld zurückzubekommen.',
+      tags: ['Widerruf', 'Gewährleistung', 'Online-Kauf'],
+      color: 'blue',
+      active: true,
+    },
+    {
+      icon: FileCheck,
+      title: 'Vertragscheck',
+      desc: 'Bevor du unterschreibst – lass Legal Buddy deinen Vertrag analysieren und Risiken aufzeigen.',
+      tags: ['Mietvertrag', 'Arbeitsvertrag', 'AGB-Check'],
+      color: 'violet',
+      active: true,
+    },
+    {
+      icon: Shield,
+      title: 'Mietrecht',
+      desc: 'Nebenkostenabrechnung, Mieterhöhung, Kündigung – demnächst bei Legal Buddy.',
+      tags: ['Nebenkosten', 'Mieterhöhung', 'Kündigung'],
+      color: 'slate',
+      active: false,
+    },
+    {
+      icon: MessageSquare,
+      title: 'Arbeitsrecht',
+      desc: 'Kündigung erhalten oder Abfindung verhandeln? Kommt bald zu Legal Buddy.',
+      tags: ['Kündigung', 'Abfindung', 'Zeugnis'],
+      color: 'slate',
+      active: false,
+    },
+  ];
+
+  const colorMap: Record<string, { icon: string; tag: string; tagText: string; border: string; glow: string }> = {
+    blue: {
+      icon: 'bg-blue-500/15 text-blue-400',
+      tag: 'bg-blue-500/10 border-blue-500/20 text-blue-300',
+      tagText: 'text-blue-300',
+      border: 'border-blue-500/20',
+      glow: 'hover:border-blue-500/30',
+    },
+    violet: {
+      icon: 'bg-violet-500/15 text-violet-400',
+      tag: 'bg-violet-500/10 border-violet-500/20 text-violet-300',
+      tagText: 'text-violet-300',
+      border: 'border-violet-500/20',
+      glow: 'hover:border-violet-500/30',
+    },
+    slate: {
+      icon: 'bg-white/5 text-slate-500',
+      tag: 'bg-white/5 border-white/8 text-slate-600',
+      tagText: 'text-slate-600',
+      border: 'border-white/5',
+      glow: '',
+    },
+  };
+
+  return (
+    <section id="rechtsgebiete" className="py-24 px-6 bg-[#080810] border-t border-white/5">
+      <div className="max-w-6xl mx-auto">
+        <div className="flex flex-col md:flex-row md:items-end md:justify-between mb-14 gap-4">
+          <div>
+            <p className="text-xs font-semibold text-violet-400 tracking-widest uppercase mb-3">Rechtsgebiete</p>
+            <h2 className="text-3xl md:text-4xl font-bold text-white tracking-tight">Wobei können wir helfen?</h2>
+          </div>
+          <p className="text-sm text-slate-400 md:max-w-xs md:text-right">Zwei Bereiche aktiv — weitere folgen.</p>
+        </div>
+        <div className="grid md:grid-cols-2 gap-4">
+          {areas.map((area, i) => {
+            const c = colorMap[area.color];
+            const Icon = area.icon;
+            return (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, y: 16 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: i * 0.08 }}
+                className={cn(
+                  'p-8 rounded-2xl border transition-all relative group',
+                  area.active
+                    ? cn('bg-white/5 hover:bg-white/7', c.border, c.glow)
+                    : 'bg-white/[0.02] border-white/5 opacity-50'
+                )}
+              >
+                {!area.active && (
+                  <span className="absolute top-6 right-6 px-2.5 py-1 bg-white/5 text-slate-600 rounded-full text-[10px] font-semibold uppercase tracking-wider border border-white/8">
+                    Bald verfügbar
+                  </span>
+                )}
+                <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center mb-5', c.icon)}>
+                  <Icon size={18} />
+                </div>
+                <h3 className="text-lg font-semibold text-white mb-2">{area.title}</h3>
+                <p className="text-sm text-slate-400 mb-6 leading-relaxed">{area.desc}</p>
+                <div className="flex flex-wrap gap-2 mb-6">
+                  {area.tags.map(tag => (
+                    <span key={tag} className={cn('px-3 py-1 rounded-full text-xs font-medium border', c.tag)}>
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+                {area.active && (
+                  <a href="#" className="inline-flex items-center gap-1.5 text-xs font-semibold text-white/60 hover:text-white transition-colors group-hover:text-white/80">
+                    Jetzt starten <ArrowRight size={13} />
+                  </a>
+                )}
+              </motion.div>
+            );
+          })}
+        </div>
       </div>
-      <div className="grid md:grid-cols-2 gap-4">
-        {[
-          { title: 'Verbraucherrecht', desc: 'Abo-Falle? Mangelhaftes Produkt? Wir helfen dir, dein Geld zurückzubekommen.', tags: ['Widerruf', 'Gewährleistung', 'Online-Kauf'], active: true },
-          { title: 'Vertragscheck', desc: 'Bevor du unterschreibst – lass Legal Buddy deinen Vertrag prüfen.', tags: ['Mietvertrag', 'Arbeitsvertrag', 'AGB-Check'], active: true },
-          { title: 'Mietrecht', desc: 'Nebenkostenabrechnung, Mieterhöhung, Kündigung – bald verfügbar.', tags: ['Nebenkosten', 'Mieterhöhung', 'Kündigung'], active: false },
-          { title: 'Arbeitsrecht', desc: 'Kündigung erhalten? Abfindung verhandeln? Bald bei Legal Buddy.', tags: ['Kündigung', 'Abfindung', 'Zeugnis'], active: false },
-        ].map((area, i) => (
-          <motion.div
-            key={i}
-            initial={{ opacity: 0, y: 16 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ delay: i * 0.08 }}
-            className={cn(
-              'p-8 rounded-2xl border transition-all relative',
-              area.active
-                ? 'bg-white/5 border-white/10 hover:border-white/20 hover:bg-white/8'
-                : 'bg-white/2 border-white/5 opacity-60'
-            )}
-          >
-            {!area.active && (
-              <span className="absolute top-6 right-6 px-2.5 py-1 bg-white/5 text-slate-500 rounded-full text-[10px] font-semibold uppercase tracking-wider border border-white/8">
-                Bald verfügbar
-              </span>
-            )}
-            <h3 className="text-base font-semibold text-white mb-2">{area.title}</h3>
-            <p className="text-sm text-slate-400 mb-6 leading-relaxed">{area.desc}</p>
-            <div className="flex flex-wrap gap-2">
-              {area.tags.map(tag => (
-                <span key={tag} className="px-3 py-1 bg-white/5 text-slate-400 rounded-full text-xs font-medium border border-white/8">
-                  {tag}
-                </span>
-              ))}
-            </div>
-          </motion.div>
-        ))}
-      </div>
-    </div>
-  </section>
-);
+    </section>
+  );
+};
 
 const Pricing = () => (
   <section id="pricing" className="py-24 px-6 bg-[#05050a] border-t border-white/5 relative overflow-hidden">
@@ -330,7 +401,7 @@ const Pricing = () => (
               <span className="text-3xl font-bold text-white">{plan.price}€</span>
               <span className="text-sm text-slate-500">/Monat</span>
             </div>
-            <ul className="space-y-3 mb-8 flex-grow">
+               <ul className="space-y-3 mb-8 flex-grow">
               {plan.features.map(f => (
                 <li key={f} className="flex items-center gap-3 text-sm">
                   <Check className="w-4 h-4 flex-shrink-0 text-blue-400" />
@@ -438,43 +509,4 @@ const Footer = () => (
         </p>
       </div>
       <div>
-        <h4 className="text-xs font-semibold uppercase tracking-widest text-slate-600 mb-5">Produkt</h4>
-        <ul className="space-y-3 text-sm text-slate-500">
-          <li><a href="#how-it-works" className="hover:text-white transition-colors">So funktioniert's</a></li>
-          <li><a href="#rechtsgebiete" className="hover:text-white transition-colors">Rechtsgebiete</a></li>
-          <li><a href="#pricing" className="hover:text-white transition-colors">Preise</a></li>
-        </ul>
-      </div>
-      <div>
-        <h4 className="text-xs font-semibold uppercase tracking-widest text-slate-600 mb-5">Rechtliches</h4>
-        <ul className="space-y-3 text-sm text-slate-500">
-          <li><a href="#" className="hover:text-white transition-colors">Impressum</a></li>
-          <li><a href="#" className="hover:text-white transition-colors">Datenschutz</a></li>
-          <li><a href="#" className="hover:text-white transition-colors">AGB</a></li>
-        </ul>
-      </div>
-    </div>
-    <div className="max-w-6xl mx-auto mt-12 pt-8 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-4 text-xs text-slate-600">
-      <span>© 2026 Legal Buddy Rechtsanwaltsgesellschaft mbH. Alle Rechte vorbehalten.</span>
-      <div className="flex gap-4">
-        <span>DSGVO-konform</span>
-        <span>Made in Germany</span>
-      </div>
-    </div>
-  </footer>
-);
-
-export default function LandingPage() {
-  return (
-    <div className="min-h-screen font-sans bg-[#05050a]">
-      <Nav />
-      <Hero />
-      <Features />
-      <Rechtsgebiete />
-      <Pricing />
-      <FAQ />
-      <CTA />
-      <Footer />
-    </div>
-  );
-}
+        <h4 className="text-xs font-semibold uppercase trac
