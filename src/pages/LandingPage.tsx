@@ -59,8 +59,8 @@ const Nav = () => {
 const Hero = () => (
   <section className="relative min-h-screen flex items-center pt-20 pb-24 px-6 bg-[#05050a] overflow-hidden">
     {/* Background glows */}
-    <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[800px] h-[500px] bg-blue-600/10 rounded-full blur-[120px] pointer-events-none" />
-    <div className="absolute top-1/3 left-1/4 w-[400px] h-[400px] bg-violet-600/8 rounded-full blur-[100px] pointer-events-none" />
+    <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[800px] h-[500px] bg-blue-600/20 rounded-full blur-[120px] pointer-events-none" />
+    <div className="absolute top-1/3 left-1/4 w-[400px] h-[400px] bg-violet-600/15 rounded-full blur-[100px] pointer-events-none" />
 
     <div className="max-w-6xl mx-auto grid lg:grid-cols-2 gap-16 items-center w-full relative">
       <motion.div
@@ -73,11 +73,11 @@ const Hero = () => (
           AI-gestützt &amp; anwaltlich geprüft
         </div>
         <h1 className="text-5xl md:text-7xl font-bold leading-[1.06] tracking-tight mb-6">
-          <span className="bg-gradient-to-r from-blue-400 via-violet-400 to-blue-300 bg-clip-text text-transparent">
+          <span className="bg-gradient-to-r from-blue-300 via-violet-300 to-cyan-200 bg-clip-text text-transparent">
             Dein Recht.
           </span>
           <br />
-          <span className="text-slate-400">Verständlich.</span>
+          <span className="text-white/75">Verständlich.</span>
           <br />
           <span className="text-white">Sofort.</span>
         </h1>
@@ -94,7 +94,7 @@ const Hero = () => (
           </Link>
           <a
             href="#how-it-works"
-            className="px-7 py-3.5 rounded-full font-semibold text-slate-300 hover:text-white border border-white/10 hover:border-white/20 hover:bg-white/5 transition-all flex items-center justify-center"
+            className="px-7 py-3.5 rounded-full font-semibold text-slate-200 hover:text-white border border-white/20 hover:border-white/30 hover:bg-white/5 transition-all flex items-center justify-center"
           >
             So funktioniert's
           </a>
@@ -117,10 +117,10 @@ const Hero = () => (
         transition={{ duration: 0.7, delay: 0.15 }}
         className="relative"
       >
-        <div className="aspect-square rounded-3xl border border-white/10 relative bg-gradient-to-br from-slate-900 to-[#05050a] overflow-hidden">
+        <div className="aspect-square rounded-3xl border border-white/20 relative bg-gradient-to-br from-slate-800/70 to-slate-900 overflow-hidden shadow-2xl shadow-blue-500/15">
           {/* Inner glow orbs */}
-          <div className="absolute top-0 right-0 w-64 h-64 bg-blue-600/15 rounded-full blur-[80px] pointer-events-none" />
-          <div className="absolute bottom-0 left-0 w-48 h-48 bg-violet-600/10 rounded-full blur-[60px] pointer-events-none" />
+          <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/25 rounded-full blur-[80px] pointer-events-none" />
+          <div className="absolute bottom-0 left-0 w-48 h-48 bg-violet-500/20 rounded-full blur-[60px] pointer-events-none" />
 
           {/* App UI Mockup */}
           <div className="absolute inset-0 p-6 flex flex-col gap-3">
@@ -140,15 +140,15 @@ const Hero = () => (
 
             {/* Chat messages */}
             <div className="flex flex-col gap-2.5 flex-grow overflow-hidden">
-              <div className="self-end max-w-[82%] bg-blue-600/20 border border-blue-500/20 rounded-2xl rounded-tr-sm px-3 py-2">
-                <p className="text-[11px] text-slate-200 leading-relaxed">Vermieter will Miete um 15% erhöhen. Was kann ich tun?</p>
+              <div className="self-end max-w-[82%] bg-blue-600/30 border border-blue-500/30 rounded-2xl rounded-tr-sm px-3 py-2">
+                <p className="text-[11px] text-white leading-relaxed">Vermieter will Miete um 15% erhöhen. Was kann ich tun?</p>
               </div>
-              <div className="self-start max-w-[88%] bg-white/5 border border-white/8 rounded-2xl rounded-tl-sm px-3 py-2">
-                <p className="text-[11px] text-slate-300 leading-relaxed">Ich analysiere Ihren Fall. Eine Erhöhung von 15% ist an klare Voraussetzungen geknüpft...</p>
+              <div className="self-start max-w-[88%] bg-white/10 border border-white/15 rounded-2xl rounded-tl-sm px-3 py-2">
+                <p className="text-[11px] text-slate-200 leading-relaxed">Ich analysiere Ihren Fall. Eine Erhöhung von 15% ist an klare Voraussetzungen geknüpft...</p>
               </div>
 
               {/* Analysis card */}
-              <div className="bg-white/5 border border-white/10 rounded-xl p-3 mt-0.5">
+              <div className="bg-white/8 border border-white/15 rounded-xl p-3 mt-0.5">
                 <div className="flex items-center gap-2 mb-2.5">
                   <FileCheck className="text-blue-400 w-3.5 h-3.5 flex-shrink-0" />
                   <span className="text-[11px] font-semibold text-white">Rechtliche Einschätzung</span>
@@ -170,7 +170,7 @@ const Hero = () => (
             </div>
 
             {/* Input bar */}
-            <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-xl px-3 py-2 mt-auto">
+            <div className="flex items-center gap-2 bg-white/8 border border-white/15 rounded-xl px-3 py-2 mt-auto">
               <div className="flex gap-1">
                 <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" />
                 <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0.15s' }} />
@@ -253,8 +253,8 @@ const Rechtsgebiete = () => (
         {[
           { title: 'Verbraucherrecht', desc: 'Abo-Falle? Mangelhaftes Produkt? Wir helfen dir, dein Geld zurückzubekommen.', tags: ['Widerruf', 'Gewährleistung', 'Online-Kauf'], active: true },
           { title: 'Vertragscheck', desc: 'Bevor du unterschreibst – lass Legal Buddy deinen Vertrag prüfen.', tags: ['Mietvertrag', 'Arbeitsvertrag', 'AGB-Check'], active: true },
-          { title: 'Mietrecht', desc: 'Nebenkostenabrechnung, Mieterhöhung, Køndigung – bald verfügbar.', tags: ['Nebenkosten', 'Mieterhöhung', 'Kündigung'], active: false },
-          { title: 'Arbeitsrecht', desc: 'Køndigung erhalten? Abfindung verhandeln? Bald bei Legal Buddy.', tags: ['Køndigung', 'Abfindung', 'Zeugnis'], active: false },
+          { title: 'Mietrecht', desc: 'Nebenkostenabrechnung, Mieterhöhung, Kündigung – bald verfügbar.', tags: ['Nebenkosten', 'Mieterhöhung', 'Kündigung'], active: false },
+          { title: 'Arbeitsrecht', desc: 'Kündigung erhalten? Abfindung verhandeln? Bald bei Legal Buddy.', tags: ['Kündigung', 'Abfindung', 'Zeugnis'], active: false },
         ].map((area, i) => (
           <motion.div
             key={i}
@@ -292,7 +292,7 @@ const Rechtsgebiete = () => (
 
 const Pricing = () => (
   <section id="pricing" className="py-24 px-6 bg-[#05050a] border-t border-white/5 relative overflow-hidden">
-    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[400px] bg-violet-600/8 rounded-full blur-[100px] pointer-events-none" />
+    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[400px] bg-violet-600/15 rounded-full blur-[100px] pointer-events-none" />
     <div className="max-w-6xl mx-auto relative">
       <div className="max-w-xl mb-14">
         <p className="text-xs font-semibold text-blue-400 tracking-widest uppercase mb-3">Preise</p>
@@ -360,8 +360,8 @@ const FAQ = () => {
   const [openIndex, setOpenIndex] = useState<number | null>(0);
   const faqs = [
     { q: 'Ist Legal Buddy ein Anwalt?', a: 'Legal Buddy wird von einer zugelassenen Rechtsanwaltskanzlei betrieben. Die AI-gestützte Ersteinschätzung wird anwaltlich verantwortet. Bei Bedarf vermitteln wir dich an spezialisierte Anwälte.' },
-    { q: 'Wie genau ist die AI-Analyse?', a: 'Unsere AI wird kontinuierlich an aktueller Rechtsprechung trainiert und von Anwälten überwacht. Jede Analyse enthält einen Confidence-Score. Bei Unsicherheit empfehlen wir eine anwaltliche Prøfung.' },
-    { q: 'Kann ich Legal Buddy jederzeit køndigen?', a: 'Ja, monatlich kündbar. Keine Mindestlaufzeit. Keine versteckten Kosten.' },
+    { q: 'Wie genau ist die AI-Analyse?', a: 'Unsere AI wird kontinuierlich an aktueller Rechtsprechung trainiert und von Anwälten überwacht. Jede Analyse enthält einen Confidence-Score. Bei Unsicherheit empfehlen wir eine anwaltliche Prüfung.' },
+    { q: 'Kann ich Legal Buddy jederzeit kündigen?', a: 'Ja, monatlich kündbar. Keine Mindestlaufzeit. Keine versteckten Kosten.' },
   ];
   return (
     <section className="py-24 px-6 bg-[#080810] border-t border-white/5">
@@ -395,7 +395,7 @@ const FAQ = () => {
 
 const CTA = () => (
   <section className="py-24 px-6 bg-[#05050a] border-t border-white/5 relative overflow-hidden">
-    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[400px] bg-blue-600/10 rounded-full blur-[120px] pointer-events-none" />
+    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[400px] bg-blue-600/20 rounded-full blur-[120px] pointer-events-none" />
     <div className="max-w-2xl mx-auto text-center relative">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
