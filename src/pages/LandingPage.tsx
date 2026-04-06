@@ -401,7 +401,7 @@ const Pricing = () => (
               <span className="text-3xl font-bold text-white">{plan.price}€</span>
               <span className="text-sm text-slate-500">/Monat</span>
             </div>
-               <ul className="space-y-3 mb-8 flex-grow">
+            <ul className="space-y-3 mb-8 flex-grow">
               {plan.features.map(f => (
                 <li key={f} className="flex items-center gap-3 text-sm">
                   <Check className="w-4 h-4 flex-shrink-0 text-blue-400" />
@@ -431,8 +431,8 @@ const FAQ = () => {
   const [openIndex, setOpenIndex] = useState<number | null>(0);
   const faqs = [
     { q: 'Ist Legal Buddy ein Anwalt?', a: 'Legal Buddy wird von einer zugelassenen Rechtsanwaltskanzlei betrieben. Die AI-gestützte Ersteinschätzung wird anwaltlich verantwortet. Bei Bedarf vermitteln wir dich an spezialisierte Anwälte.' },
-    { q: 'Wie genau ist die AI-Analyse?', a: 'Unsere AI wird kontinuierlich an aktueller Rechtsprechung trainiert und von Anwälten überwacht. Jede Analyse enthält einen Confidence-Score. Bei Unsicherheit empfehlen wir eine anwaltliche Prüfung.' },
-    { q: 'Kann ich Legal Buddy jederzeit kündigen?', a: 'Ja, monatlich kündbar. Keine Mindestlaufzeit. Keine versteckten Kosten.' },
+    { q: 'Wie genau ist die AI-Analyse?', a: 'Unsere AI wird kontinuierlich an aktueller Rechtsprechung trainiert und von Anwälten øberwacht. Jede Analyse enthält einen Confidence-Score. Bei Unsicherheit empfehlen wir eine anwaltliche Prøfung.' },
+    { q: 'Kann ich Legal Buddy jederzeit køndigen?', a: 'Ja, monatlich kündbar. Keine Mindestlaufzeit. Keine versteckten Kosten.' },
   ];
   return (
     <section className="py-24 px-6 bg-[#080810] border-t border-white/5">
@@ -509,4 +509,43 @@ const Footer = () => (
         </p>
       </div>
       <div>
-        <h4 className="text-xs font-semibold uppercase trac
+        <h4 className="text-xs font-semibold uppercase tracking-widest text-slate-600 mb-5">Produkt</h4>
+        <ul className="space-y-3 text-sm text-slate-500">
+          <li><a href="#how-it-works" className="hover:text-white transition-colors">So funktioniert's</a></li>
+          <li><a href="#rechtsgebiete" className="hover:text-white transition-colors">Rechtsgebiete</a></li>
+          <li><a href="#pricing" className="hover:text-white transition-colors">Preise</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4 className="text-xs font-semibold uppercase tracking-widest text-slate-600 mb-5">Rechtliches</h4>
+        <ul className="space-y-3 text-sm text-slate-500">
+          <li><a href="#" className="hover:text-white transition-colors">Impressum</a></li>
+          <li><a href="#" className="hover:text-white transition-colors">Datenschutz</a></li>
+          <li><a href="#" className="hover:text-white transition-colors">AGB</a></li>
+        </ul>
+      </div>
+    </div>
+    <div className="max-w-6xl mx-auto mt-12 pt-8 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-4 text-xs text-slate-600">
+      <span>© 2026 Legal Buddy Rechtsanwaltsgesellschaft mbH. Alle Rechte vorbehalten.</span>
+      <div className="flex gap-4">
+        <span>DSGVO-konform</span>
+        <span>Made in Germany</span>
+      </div>
+    </div>
+  </footer>
+);
+
+export default function LandingPage() {
+  return (
+    <div className="min-h-screen font-sans bg-[#05050a]">
+      <Nav />
+      <Hero />
+      <Features />
+      <Rechtsgebiete />
+      <Pricing />
+      <FAQ />
+      <CTA />
+      <Footer />
+    </div>
+  );
+}
